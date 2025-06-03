@@ -1,0 +1,265 @@
+# Dependencies
+node_modules/
+
+# Python virtual environments
+venv/
+.venv/
+google_speech_real_time/venv/
+
+# Large model files
+models/
+*.bin
+
+# macOS system files
+.DS_Store
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Compiled binary addons
+build/Release
+dist/
+
+# Dependency directories
+jspm_packages/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# dotenv environment variables file
+.env
+.env.test
+
+# Output of 'npm pack'
+out/
+
+# Build outputs
+dist/
+build/
+*.o
+
+# Environment
+.env
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Swift build
+src/swift/Recorder
+*.xcodeproj/
+*.xcworkspace/
+
+# Google Cloud credentials
+credentials/
+
+# Installer and distribution files
+installers/
+*.dmg
+*.zip
+*.app
+*.exe
+*.msi
+*.deb
+*.rpm
+*.pkg
+
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# local env files
+.env*.local
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# Electron
+/dist/
+/out/
+
+# Build outputs
+build/
+dist/
+
+# Packages
+*.dmg
+*.zip
+*.app
+*.msi
+*.exe
+*.deb
+*.rpm
+*.pkg
+*.tar.gz
+*.tar.xz
+*.7z
+
+# Installer files
+Interview-Lift-*.dmg
+interview-lift-*.zip
+Interview-Lift-Installer-*.dmg
+*-installer.*
+install-*.dmg
+*.blockmap
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Windows
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+app_logs.txt
+timing_logs.txt
+
+# Node modules
+node_modules/
+
+# Environment variables
+.env
+.env.local
+.env.production
+.env.development
+
+# API Keys and Credentials (IMPORTANT: Keep these secure!)
+stt.json
+sttkey.json
+google-credentials.json
+*.json.secret
+api-keys.json
+
+# FFmpeg binaries
+bin/ffmpeg
+bin/ffmpeg.exe
+bin/ffprobe
+bin/ffprobe.exe
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio files
+.vs/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+*.dbmdl
+*.dbproj.schemaview
+*.jfm
+*.pfx
+*.publishsettings
+orleans.codegen.cs
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Project specific
+*.wav
+*.mp3
+*.mp4
+*.mov
+*.avi

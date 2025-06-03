@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="script-src 'self' https://cdn.tailwindcss.com;" />
+  <title>Interview Lift - Setup Required</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-100 h-screen flex items-center justify-center p-4">
+  <div class="bg-white shadow-lg rounded-lg p-8 max-w-2xl mx-auto text-center">
+    <div class="mb-6">
+      <svg class="mx-auto h-16 w-16 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+      </svg>
+    </div>
+    
+    <h1 class="text-3xl font-bold text-orange-600 mb-4">Setup Required</h1>
+    <p class="mb-6 text-lg text-gray-700">Interview Lift needs access to screen recording and system audio to provide AI-powered interview assistance.</p>
+    
+    <!-- Platform-specific instructions will be inserted here -->
+    <div id="platform-instructions" class="mb-8 text-left bg-gray-50 p-6 rounded-lg">
+      <div id="loading-instructions" class="text-center">
+        <div class="animate-spin inline-block w-6 h-6 border-4 border-gray-300 border-t-blue-500 rounded-full"></div>
+        <p class="mt-2 text-gray-600">Detecting your system...</p>
+      </div>
+    </div>
+
+    <div class="space-y-4">
+      <button id="check-permissions"
+        class="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-3 px-6 rounded-lg transition-colors duration-150 ease-in-out">
+        Check Setup Again
+      </button>
+      
+      <button id="open-settings"
+        class="w-full bg-gray-500 hover:bg-gray-600 text-white font-medium py-3 px-6 rounded-lg transition-colors duration-150 ease-in-out">
+        Open System Settings
+      </button>
+      
+      <button id="get-help"
+        class="w-full bg-green-500 hover:bg-green-600 text-white font-medium py-3 px-6 rounded-lg transition-colors duration-150 ease-in-out">
+        Get Detailed Help
+      </button>
+    </div>
+
+    <!-- Detailed status panel (hidden by default) -->
+    <div id="detailed-status" class="hidden mt-6 p-4 bg-gray-50 rounded-lg text-left">
+      <h3 class="font-semibold mb-2">Detailed System Status:</h3>
+      <div id="status-content" class="text-sm space-y-2">
+        <!-- Status details will be inserted here -->
+      </div>
+    </div>
+  </div>
+
+  <script src="./renderer.js"></script>
+</body>
+
+</html>

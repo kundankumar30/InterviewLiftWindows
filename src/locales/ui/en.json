@@ -1,0 +1,76 @@
+{
+  "welcome": {
+    "title": "Welcome to Interview Lift",
+    "jobRole": "Job Role",
+    "jobRolePlaceholder": "e.g. Frontend Developer",
+    "keySkills": "Key Skills",
+    "keySkillsPlaceholder": "e.g. React, TypeScript, Node.js",
+    "uiLanguage": "UI Language",
+    "speechLanguage": "Speech & AI Language",
+    "startButton": "Start Assistant",
+    "shortcuts": "Keyboard shortcuts",
+    "toggleVisibility": "to toggle visibility",
+    "quit": "to quit",
+    "start": "to start assistant"
+  },
+  "status": {
+    "initializing": "Initializing",
+    "recording": "Recording...",
+    "stopped": "Stopped",
+    "paused": "Paused",
+    "processing": "Processing...",
+    "ready": "Ready",
+    "error": "Error",
+    "loading": "Loading...",
+    "listening": "Listening...",
+    "waiting": "Stopped. Waiting for transcription...",
+    "failed": "Failed to start. Please try again.",
+    "muted": "Muted",
+    "standby": "Standby"
+  },
+  "menu": {
+    "file": "File",
+    "edit": "Edit",
+    "view": "View",
+    "window": "Window",
+    "help": "Help",
+    "about": "About",
+    "quit": "Quit",
+    "preferences": "Preferences"
+  },
+  "settings": {
+    "title": "Settings",
+    "general": "General",
+    "audio": "Audio",
+    "transcription": "Transcription",
+    "language": "Language",
+    "quality": "Quality",
+    "format": "Format",
+    "saveLocation": "Save Location",
+    "apiKey": "API Key",
+    "model": "Model"
+  },
+  "messages": {
+    "recordingStarted": "Recording started successfully",
+    "recordingStopped": "Recording stopped",
+    "fileSaved": "File saved successfully",
+    "errorOccurred": "An error occurred",
+    "noAudioDevice": "No audio device found",
+    "permissionRequired": "Microphone permission required",
+    "transcriptionComplete": "Transcription completed",
+    "transcriptionFailed": "Transcription failed"
+  },
+  "errors": {
+    "audioInitFailed": "Failed to initialize audio",
+    "saveFailed": "Failed to save file",
+    "loadFailed": "Failed to load file",
+    "transcriptionError": "Transcription error",
+    "networkError": "Network error",
+    "apiError": "API error"
+  },
+  "permissions": {
+    "denied": "Permission Denied",
+    "deniedMessage": "You need to grant permission to use the system audio recorder.",
+    "systemSettingsMessage": "You need to grant screen recording permission for the app to function. Please check System Settings."
+  }
+} 

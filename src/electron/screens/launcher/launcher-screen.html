@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interview Lift - Launcher</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    .launcher-container {
+      text-align: center;
+      max-width: 400px;
+      padding: 2rem;
+    }
+
+    .logo {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+
+    .title {
+      font-size: 1.8rem;
+      font-weight: bold;
+      margin-bottom: 0.5rem;
+    }
+
+    .subtitle {
+      font-size: 1rem;
+      opacity: 0.9;
+      margin-bottom: 2rem;
+    }
+
+    .auth-message {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      backdrop-filter: blur(10px);
+    }
+
+    .auth-message h3 {
+      margin: 0 0 1rem 0;
+      font-size: 1.1rem;
+    }
+
+    .auth-message p {
+      margin: 0.5rem 0;
+      font-size: 0.9rem;
+      opacity: 0.9;
+    }
+
+    .launch-button {
+      background: #48bb78;
+      color: white;
+      border: none;
+      padding: 1rem 2rem;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-bottom: 1rem;
+      width: 100%;
+    }
+
+    .launch-button:hover {
+      background: #38a169;
+      transform: translateY(-1px);
+    }
+
+    .launch-button:disabled {
+      background: #4a5568;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .status {
+      font-size: 0.9rem;
+      opacity: 0.8;
+      margin-top: 1rem;
+    }
+
+    .loading {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 1s ease-in-out infinite;
+      margin-right: 0.5rem;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .steps {
+      text-align: left;
+      font-size: 0.85rem;
+      opacity: 0.8;
+    }
+
+    .steps ol {
+      margin: 0;
+      padding-left: 1.2rem;
+    }
+
+    .steps li {
+      margin: 0.3rem 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="launcher-container">
+    <div class="logo">🚀</div>
+    <div class="title">Interview Lift</div>
+    <div class="subtitle">AI-Powered Interview Assistant</div>
+    
+    <div class="auth-message">
+      <h3>🔐 Authentication Required</h3>
+      <p>To get started, we'll open your web browser for secure authentication.</p>
+      <p>After signing in, return here to launch the desktop app.</p>
+      
+      <div class="steps">
+        <ol>
+          <li>Click "Open Web Browser" below</li>
+          <li>Sign in with Gmail or Email</li>
+          <li>Return to this window</li>
+          <li>Desktop app will launch automatically</li>
+        </ol>
+      </div>
+    </div>
+
+    <button id="launch-button" class="launch-button">
+      Open Web Browser
+    </button>
+
+    <div id="status" class="status">
+      Ready to authenticate
+    </div>
+  </div>
+
+  <script>
+    const { ipcRenderer, shell } = require('electron');
+    
+    const launchButton = document.getElementById('launch-button');
+    const status = document.getElementById('status');
+    
+    let authCheckInterval;
+    
+    launchButton.addEventListener('click', async () => {
+      try {
+        launchButton.disabled = true;
+        launchButton.innerHTML = '<span class="loading"></span>Opening browser...';
+        status.textContent = 'Opening web browser for authentication...';
+        
+        // Open the Next.js homepage in the default browser
+        const webAppUrl = 'http://localhost:3000';
+        await shell.openExternal(webAppUrl);
+        
+        // Update UI to show waiting state
+        launchButton.innerHTML = '<span class="loading"></span>Waiting for authentication...';
+        status.textContent = 'Please complete authentication in your browser';
+        
+        // Start checking for authentication completion
+        startAuthCheck();
+        
+      } catch (error) {
+        console.error('Failed to open browser:', error);
+        launchButton.disabled = false;
+        launchButton.textContent = 'Open Web Browser';
+        status.textContent = 'Failed to open browser. Please try again.';
+      }
+    });
+    
+    function startAuthCheck() {
+      // Check every 2 seconds if authentication is complete
+      authCheckInterval = setInterval(async () => {
+        try {
+          // Try to fetch from the Next.js app to check if user is authenticated
+          const response = await fetch('http://localhost:3000/api/auth-status', {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json',
+            }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.authenticated) {
+              // User is authenticated, proceed to welcome screen
+              clearInterval(authCheckInterval);
+              launchButton.innerHTML = '<span class="loading"></span>Launching desktop app...';
+              status.textContent = 'Authentication successful! Launching desktop app...';
+              
+              // Send user data to main process and navigate to welcome screen
+              ipcRenderer.send('user-authenticated', data.user);
+              
+              setTimeout(() => {
+                ipcRenderer.send('navigate', 'welcome');
+              }, 1500);
+            }
+          }
+        } catch (error) {
+          // If Next.js server is not running, show helpful message
+          if (error.message.includes('fetch')) {
+            clearInterval(authCheckInterval);
+            launchButton.disabled = false;
+            launchButton.textContent = 'Start Next.js Server First';
+            status.textContent = 'Please run "npm run dev" first, then try again';
+          }
+        }
+      }, 2000);
+      
+      // Stop checking after 5 minutes (timeout)
+      setTimeout(() => {
+        if (authCheckInterval) {
+          clearInterval(authCheckInterval);
+          launchButton.disabled = false;
+          launchButton.textContent = 'Open Web Browser';
+          status.textContent = 'Authentication timed out. Please try again.';
+        }
+      }, 300000); // 5 minutes
+    }
+    
+    // Listen for manual navigation events
+    ipcRenderer.on('auth-completed', (event, userData) => {
+      clearInterval(authCheckInterval);
+      launchButton.innerHTML = '<span class="loading"></span>Launching desktop app...';
+      status.textContent = `Welcome ${userData.name}! Launching desktop app...`;
+      
+      setTimeout(() => {
+        ipcRenderer.send('navigate', 'welcome');
+      }, 1500);
+    });
+  </script>
+</body>
+</html> 

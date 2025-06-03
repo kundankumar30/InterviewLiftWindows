@@ -1,0 +1,117 @@
+{
+  "name": "interview-lift",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./src/electron/main.js",
+  "author": "Interview Lift Team",
+  "description": "AI-Powered Real-Time Interview Support for Global Job Seekers",
+  "keywords": [
+    "interview",
+    "job-search",
+    "ai-assistant",
+    "speech-recognition",
+    "electron",
+    "career",
+    "job-interview",
+    "ai-powered",
+    "real-time",
+    "global-jobs"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/interview-lift.git"
+  },
+  "license": "MIT",
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev",
+    "lint": "next lint",
+    "start": "next start",
+    "recorder:build": "node scripts/build-recorder.js",
+    "recorder:build:clean": "node scripts/build-recorder.js --clean",
+    "recorder:build:debug": "node scripts/build-recorder.js --debug",
+    "recorder:build:macos": "bash scripts/build-macos-recorder.sh",
+    "recorder:build:windows": "powershell -ExecutionPolicy Bypass -File scripts/build-windows-recorder.ps1",
+    "swift:make": "npm run recorder:build",
+    "setup:build-deps": "node scripts/setup-build-deps.js",
+    "ffmpeg:download": "node scripts/download-ffmpeg.js",
+    "ffmpeg:verify": "node -e \"const FFmpegDownloader = require('./scripts/download-ffmpeg.js'); const d = new FFmpegDownloader(); d.verifyFFmpeg().then(ok => process.exit(ok ? 0 : 1))\"",
+    "ffmpeg:check": "node -e \"const fs = require('fs'); const path = require('path'); const binDir = path.join(process.cwd(), 'bin'); const execName = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'; const ffmpegPath = path.join(binDir, execName); console.log(fs.existsSync(ffmpegPath) ? '✅ FFmpeg exists at ' + ffmpegPath : '❌ FFmpeg not found at ' + ffmpegPath);\"",
+    "postinstall": "electron-builder install-app-deps",
+    "dev-setup": "node scripts/setup-dev-environment.js",
+    "electron:start": "electron-forge start",
+    "electron:dev": "electron-forge start",
+    "electron:package": "npm run recorder:build && electron-forge package",
+    "electron:make": "npm run recorder:build && electron-forge make --arch=universal --platform=darwin",
+    "electron": "electron-forge start",
+    "ffmpeg:ensure": "node -e \"const fs = require('fs'); const path = require('path'); const execName = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'; const ffmpegPath = path.join(process.cwd(), 'bin', execName); if (!fs.existsSync(ffmpegPath)) { console.log('FFmpeg not found, downloading...'); require('./scripts/download-ffmpeg.js'); } else { console.log('FFmpeg already available at:', ffmpegPath); }\"",
+    "check-oauth": "node check-oauth-verification.js",
+    "setup:ffmpeg": "node scripts/download-ffmpeg.js",
+    "test:permissions": "node -e \"const { checkPermissions, getDetailedPermissionStatus } = require('./src/electron/utils/permission'); getDetailedPermissionStatus().then(console.log)\"",
+    "verify-setup": "node scripts/verify-setup.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@cerebras/cerebras_cloud_sdk": "^1.0.0",
+    "@clerk/clerk-js": "^5.67.5",
+    "@clerk/nextjs": "^6.20.2",
+    "@google-cloud/speech": "^7.1.0",
+    "@google/genai": "^1.0.0",
+    "@google/generative-ai": "^0.24.1",
+    "@tailwindcss/postcss": "^4.1.8",
+    "dotenv": "^16.5.0",
+    "jsdom": "^26.1.0",
+    "lucide-react": "^0.511.0",
+    "next": "15.3.3",
+    "node-machine-id": "^1.1.12",
+    "node-record-lpcm16": "^1.0.1",
+    "openai": "^4.26.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "shelljs": "^0.8.5"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^7.5.0",
+    "@electron-forge/maker-deb": "^7.5.0",
+    "@electron-forge/maker-dmg": "^7.8.1",
+    "@electron-forge/maker-pkg": "^7.5.0",
+    "@electron-forge/maker-rpm": "^7.5.0",
+    "@electron-forge/maker-squirrel": "^7.5.0",
+    "@electron-forge/maker-zip": "^7.5.0",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.5.0",
+    "@electron-forge/plugin-fuses": "^7.5.0",
+    "@electron/fuses": "^1.8.0",
+    "@eslint/eslintrc": "^3.2.0",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.4.21",
+    "electron": "^29.4.6",
+    "eslint": "^8",
+    "eslint-config-next": "15.3.3",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^4.1.7",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "systemDependencies": {
+    "description": "System-level dependencies required for building platform-specific recorders",
+    "macOS": {
+      "swift": "5.0+",
+      "xcode": "14.0+ (or standalone Swift toolchain)",
+      "macos": "12.3+ (for ScreenCaptureKit support)"
+    },
+    "windows": {
+      "dotnet": "8.0+ SDK",
+      "windows": "10 1903+ or Windows 11",
+      "visualStudio": "2022 17.8+ (optional, for development)"
+    },
+    "installation": {
+      "windows": "winget install Microsoft.DotNet.SDK.8",
+      "macOS": "Install Xcode from App Store or download Swift from swift.org"
+    }
+  }
+}
