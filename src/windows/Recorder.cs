@@ -576,56 +576,97 @@ namespace WindowsRecorder
             }
         }
 
+        /// <summary>
+        /// Resamples a list of PCM samples from an original sample rate to a target sample rate.
+        /// </summary>
+        /// <param name="pcmSamples">The input list of 16-bit PCM samples.</param>
+        /// <param name="originalSampleRate">The original sample rate (e.g., 44100).</param>
+        /// <param name="targetSampleRate">The target sample rate (e.g., 16000).</param>
+        /// <returns>A new list of resampled 16-bit PCM samples.</returns>
+        private List<short> Resample(List<short> pcmSamples, uint originalSampleRate, uint targetSampleRate)
+        {
+            if (originalSampleRate == targetSampleRate)
+            {
+                return pcmSamples;
+            }
+
+            var resampledSamples = new List<short>();
+            double ratio = (double)originalSampleRate / targetSampleRate;
+            int outputLength = (int)(pcmSamples.Count / ratio);
+
+            for (int i = 0; i < outputLength; i++)
+            {
+                double floatIndex = i * ratio;
+                int index1 = (int)floatIndex;
+                int index2 = index1 + 1;
+
+                if (index2 >= pcmSamples.Count)
+                {
+                    // If at the end of the list, just use the last sample.
+                    resampledSamples.Add(pcmSamples[index1]);
+                }
+                else
+                {
+                    // Linear interpolation for higher quality resampling.
+                    double fraction = floatIndex - index1;
+                    short sample1 = pcmSamples[index1];
+                    short sample2 = pcmSamples[index2];
+                    short resampledValue = (short)(sample1 + (sample2 - sample1) * fraction);
+                    resampledSamples.Add(resampledValue);
+                }
+            }
+            return resampledSamples;
+        }
+
+        /// <summary>
+        /// Converts raw 32-bit float audio data into 16-bit PCM, 16kHz mono format for Google STT.
+        /// </summary>
+        /// <param name="rawAudioData">The raw audio data from the system.</param>
+        /// <param name="originalFormat">The original WAVEFORMATEX of the captured audio.</param>
+        /// <returns>A byte array containing the converted audio data.</returns>
         private byte[] ConvertToSttFormat(byte[] rawAudioData, WAVEFORMATEX originalFormat)
         {
             try
             {
-                // Convert 32-bit float to 16-bit PCM
+                // 1. Convert raw 32-bit float data to an array of floats
                 var floatSamples = new float[rawAudioData.Length / 4];
                 Buffer.BlockCopy(rawAudioData, 0, floatSamples, 0, rawAudioData.Length);
-                
-                // Convert to 16-bit PCM samples
-                var pcmSamples = new List<short>();
-                
+
+                // 2. Down-mix to mono and convert to 16-bit PCM in one pass
+                var monoPcmSamples = new List<short>();
                 for (int i = 0; i < floatSamples.Length; i += originalFormat.nChannels)
                 {
-                    // Mix stereo to mono by averaging channels
-                    float sample = 0;
-                    if (originalFormat.nChannels == 2)
+                    float monoSample = 0;
+                    if (originalFormat.nChannels >= 2)
                     {
-                        sample = (floatSamples[i] + floatSamples[i + 1]) / 2.0f;
+                        // Average the first two channels for mono
+                        monoSample = (floatSamples[i] + floatSamples[i + 1]) / 2.0f;
                     }
                     else
                     {
-                        sample = floatSamples[i];
+                        monoSample = floatSamples[i];
                     }
-                    
-                    // Apply noise gate
-                    if (Math.Abs(sample) < 0.001f)
+
+                    // Apply a simple noise gate to reduce background hiss
+                    if (Math.Abs(monoSample) < 0.001f)
                     {
-                        sample = 0.0f;
+                        monoSample = 0.0f;
                     }
-                    
-                    // Clamp and convert to 16-bit
-                    sample = Math.Max(-1.0f, Math.Min(1.0f, sample));
-                    int intSample = (int)(sample * 32767.0f + (sample >= 0 ? 0.5f : -0.5f));
-                    pcmSamples.Add((short)Math.Max(-32768, Math.Min(32767, intSample)));
+
+                    // Clamp the sample to the [-1.0, 1.0] range to prevent clipping
+                    monoSample = Math.Max(-1.0f, Math.Min(1.0f, monoSample));
+
+                    // Convert to 16-bit integer and add to the list
+                    monoPcmSamples.Add((short)(monoSample * 32767.0f));
                 }
-                
-                // Simple resampling from 48kHz to 16kHz if needed (3:1 decimation)
-                if (originalFormat.nSamplesPerSec == 48000 && TARGET_SAMPLE_RATE == 16000)
-                {
-                    var resampledSamples = new List<short>();
-                    for (int i = 0; i < pcmSamples.Count; i += 3)
-                    {
-                        resampledSamples.Add(pcmSamples[i]); // Take every 3rd sample
-                    }
-                    pcmSamples = resampledSamples;
-                }
-                
-                // Convert to byte array
-                var result = new byte[pcmSamples.Count * 2];
-                Buffer.BlockCopy(pcmSamples.ToArray(), 0, result, 0, result.Length);
+
+                // 3. Resample the mono audio to the target sample rate (16kHz)
+                var resampledPcmSamples = Resample(monoPcmSamples, originalFormat.nSamplesPerSec, TARGET_SAMPLE_RATE);
+
+                // 4. Convert the final list of 16-bit samples to a byte array
+                var result = new byte[resampledPcmSamples.Count * 2];
+                Buffer.BlockCopy(resampledPcmSamples.ToArray(), 0, result, 0, result.Length);
+
                 return result;
             }
             catch (Exception ex)
@@ -1354,3 +1395,4 @@ namespace WindowsRecorder
         }
     }
 } 
+

@@ -2,7 +2,7 @@ const { app } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
-// Hardcoded language settings for EN-IN only
+// Hardcoded language settings for EN-US only
 const currentUILanguage = 'en';
 const currentTranscriptionLanguage = 'en-US';
 const currentAIResponseLanguage = 'en';

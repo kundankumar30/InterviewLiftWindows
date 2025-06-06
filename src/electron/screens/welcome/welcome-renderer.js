@@ -278,7 +278,7 @@ window.addEventListener('DOMContentLoaded', () => {
       const userData = {
         jobRole: jobRoleInput.value.trim(),
         keySkills: keySkillsInput.value.trim(),
-        // Hardcode to EN-IN
+        // Hardcode to EN-US
         uiLanguage: 'en',
         transcriptionLanguage: 'en-US',
         aiLanguage: 'en'
