@@ -11,14 +11,11 @@ class RecorderBuilder {
         this.scriptDir = __dirname;
         this.projectRoot = path.dirname(this.scriptDir);
         
-        console.log(`🖥️  Detected platform: ${this.platform}`);
-        console.log(`📁 Project root: ${this.projectRoot}`);
     }
 
     async build(options = {}) {
         const { clean = false, configuration = 'release' } = options;
 
-        console.log(`🔨 Building recorder for ${this.platform}...`);
 
         if (!this.isSupportedPlatform()) {
             console.error(`❌ Platform '${this.platform}' is not supported.`);
@@ -33,7 +30,6 @@ class RecorderBuilder {
                 await this.buildWindows(clean, configuration);
             }
             
-            console.log('✅ Build completed successfully!');
             await this.verifyBuild();
             
         } catch (error) {
@@ -47,7 +43,6 @@ class RecorderBuilder {
     }
 
     async buildMacOS(clean, configuration) {
-        console.log('🍎 Building macOS Swift recorder...');
         
         const scriptPath = path.join(this.scriptDir, 'build-macos-recorder.sh');
         
@@ -64,7 +59,6 @@ class RecorderBuilder {
     }
 
     async buildWindows(clean, configuration) {
-        console.log('🪟 Building Windows C# recorder...');
         
         const scriptPath = path.join(this.scriptDir, 'build-windows-recorder.ps1');
         
@@ -81,7 +75,6 @@ class RecorderBuilder {
 
     async runScript(command, args) {
         return new Promise((resolve, reject) => {
-            console.log(`🚀 Running: ${command} ${args.join(' ')}`);
             
             const process = spawn(command, args, {
                 stdio: 'inherit',
@@ -103,7 +96,6 @@ class RecorderBuilder {
     }
 
     async verifyBuild() {
-        console.log('🔍 Verifying build output...');
         
         const expectedPath = this.getExpectedExecutablePath();
         
@@ -111,9 +103,6 @@ class RecorderBuilder {
             const stats = fs.statSync(expectedPath);
             const sizeKB = (stats.size / 1024).toFixed(2);
             
-            console.log(`✅ Executable found: ${expectedPath}`);
-            console.log(`📏 File size: ${sizeKB} KB`);
-            console.log(`📅 Modified: ${stats.mtime.toISOString()}`);
             
             // Test execution
             await this.testExecutable(expectedPath);
@@ -134,7 +123,6 @@ class RecorderBuilder {
 
     async testExecutable(executablePath) {
         return new Promise((resolve) => {
-            console.log('🧪 Testing executable...');
             
             try {
                 const testProcess = spawn(executablePath, ['--check-permissions'], {
@@ -151,18 +139,14 @@ class RecorderBuilder {
                     if (stderr.trim()) {
                         try {
                             const response = JSON.parse(stderr.trim());
-                            console.log(`✅ Test completed - Response: ${response.code}`);
                         } catch {
-                            console.log('✅ Test completed - Got response (not JSON)');
                         }
                     } else {
-                        console.log('✅ Test completed - No response');
                     }
                     resolve();
                 });
 
                 testProcess.on('error', (error) => {
-                    console.log(`⚠️  Test warning: ${error.message} (this is normal for Windows API initialization)`);
                     resolve();
                 });
 
@@ -173,39 +157,17 @@ class RecorderBuilder {
                     } catch (e) {
                         // Ignore kill errors
                     }
-                    console.log('⚠️  Test timeout - this is normal for permission checks');
                     resolve();
                 }, 5000);
                 
             } catch (error) {
-                console.log(`⚠️  Test warning: ${error.message} (this is normal for Windows API initialization)`);
                 resolve();
             }
         });
     }
 
     printUsage() {
-        console.log(`
-Usage: node build-recorder.js [options]
 
-Options:
-  --clean         Clean build artifacts before building
-  --debug         Build in debug mode (default: release)
-  --help, -h      Show this help message
-
-Examples:
-  node build-recorder.js                    # Build in release mode
-  node build-recorder.js --clean            # Clean and build
-  node build-recorder.js --debug --clean    # Clean and build in debug mode
-
-Platform Support:
-  macOS (darwin):  Builds Swift recorder using ScreenCaptureKit
-  Windows (win32): Builds C# recorder using Windows.Media.Capture
-
-Build Requirements:
-  macOS:    Xcode or Swift toolchain, macOS 12.3+
-  Windows:  .NET 8 SDK, Windows 10 1903+ or Windows 11
-`);
     }
 }
 

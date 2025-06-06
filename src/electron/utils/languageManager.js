@@ -4,7 +4,7 @@ const path = require('path');
 
 // Hardcoded language settings for EN-IN only
 const currentUILanguage = 'en';
-const currentTranscriptionLanguage = 'en-IN';
+const currentTranscriptionLanguage = 'en-US';
 const currentAIResponseLanguage = 'en';
 let uiTranslations = {};
 

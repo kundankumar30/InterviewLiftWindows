@@ -33,7 +33,6 @@ class FFmpegDownloader {
             const protocol = url.startsWith('https:') ? https : http;
             const file = fs.createWriteStream(destination);
             
-            console.log(`Downloading ${url} to ${destination}`);
             
             const request = protocol.get(url, (response) => {
                 if (response.statusCode === 302 || response.statusCode === 301) {
@@ -63,7 +62,6 @@ class FFmpegDownloader {
                 
                 file.on('finish', () => {
                     file.close();
-                    console.log('\nDownload completed!');
                     resolve();
                 });
             });
@@ -96,7 +94,6 @@ class FFmpegDownloader {
                 
                 ps.on('close', (code) => {
                     if (code === 0) {
-                        console.log('Zip extraction completed');
                         resolve();
                     } else {
                         reject(new Error(`Extraction failed with code ${code}`));
@@ -108,7 +105,6 @@ class FFmpegDownloader {
                 
                 unzip.on('close', (code) => {
                     if (code === 0) {
-                        console.log('Zip extraction completed');
                         resolve();
                     } else {
                         reject(new Error(`Extraction failed with code ${code}`));
@@ -124,7 +120,6 @@ class FFmpegDownloader {
             
             tar.on('close', (code) => {
                 if (code === 0) {
-                    console.log('Tar extraction completed');
                     resolve();
                 } else {
                     reject(new Error(`Extraction failed with code ${code}`));
@@ -191,7 +186,6 @@ class FFmpegDownloader {
             
             // Check if FFmpeg already exists
             if (fs.existsSync(finalPath)) {
-                console.log(`FFmpeg already exists at ${finalPath}`);
                 return true;
             }
 
@@ -223,7 +217,6 @@ class FFmpegDownloader {
                 fs.mkdirSync(extractDir, { recursive: true });
 
                 // Extract archive
-                console.log('Extracting archive...');
                 await this.extractArchive(archivePath, extractDir);
 
                 // Find FFmpeg executable
@@ -233,7 +226,6 @@ class FFmpegDownloader {
                 }
 
                 // Copy to final location
-                console.log(`Copying FFmpeg from ${ffmpegPath} to ${finalPath}`);
                 fs.copyFileSync(ffmpegPath, finalPath);
 
                 // Make executable on Unix systems
@@ -241,7 +233,6 @@ class FFmpegDownloader {
                     fs.chmodSync(finalPath, '755');
                 }
 
-                console.log(`✅ FFmpeg successfully installed at ${finalPath}`);
                 return true;
 
             } finally {
@@ -269,7 +260,6 @@ class FFmpegDownloader {
         const ffmpegPath = path.join(this.binDir, executableName);
         
         if (!fs.existsSync(ffmpegPath)) {
-            console.log('❌ FFmpeg executable not found');
             return false;
         }
 
@@ -283,17 +273,13 @@ class FFmpegDownloader {
 
             ffmpeg.on('close', (code) => {
                 if (code === 0 && output.includes('ffmpeg version')) {
-                    console.log('✅ FFmpeg verification successful');
-                    console.log(`Version: ${output.split('\n')[0]}`);
                     resolve(true);
                 } else {
-                    console.log('❌ FFmpeg verification failed');
                     resolve(false);
                 }
             });
 
             ffmpeg.on('error', (error) => {
-                console.log('❌ FFmpeg verification error:', error.message);
                 resolve(false);
             });
         });
@@ -302,7 +288,6 @@ class FFmpegDownloader {
 
 // Main execution
 async function main() {
-    console.log(`🔽 Starting FFmpeg download for ${os.platform()}-${os.arch()}`);
     
     const downloader = new FFmpegDownloader();
     const success = await downloader.downloadAndExtractFFmpeg();
@@ -310,14 +295,11 @@ async function main() {
     if (success) {
         const verified = await downloader.verifyFFmpeg();
         if (verified) {
-            console.log('🎉 FFmpeg setup completed successfully!');
             process.exit(0);
         } else {
-            console.log('❌ FFmpeg verification failed');
             process.exit(1);
         }
     } else {
-        console.log('❌ FFmpeg download failed');
         process.exit(1);
     }
 }

@@ -202,11 +202,7 @@ async function handleAuthCallback(authUrl) {
         console.log('🔍 Performing user validation before welcome screen...');
         try {
           const validationResult = await userValidation.performUserValidation(result.user);
-          console.log('✅ User validation completed:', {
-            success: validationResult.success,
-            userType: validationResult.userType,
-            accessLevel: validationResult.accessLevel
-          });
+     
           
           // Store validation result with user data
           global.currentUser.validation = validationResult;
@@ -265,7 +261,6 @@ async function handleAuthCallback(authUrl) {
     }
 
     if (authCode) {
-      console.log('Received Google OAuth authorization code');
       try {
         await exchangeCodeForTokens(authCode);
       } catch (error) {
@@ -317,7 +312,7 @@ const createWindow = async () => {
     width: 1200,
     height: 800,
     transparent: true,     // Enable transparency
-    frame: true,           // Show window frame
+    frame: false,           // Show window frame
     hasShadow: true,       // Show window shadow
     show: false,           // Don't show window initially
     skipTaskbar: false,    // Show in dock/taskbar
@@ -442,7 +437,6 @@ const createWindow = async () => {
 
 // Function to transition to welcome mode after authentication
 function transitionToWelcomeMode() {
-  console.log('🔄 Transitioning to welcome mode...');
   
   // Update window properties for welcome screen
   global.mainWindow.setSize(800, 600);

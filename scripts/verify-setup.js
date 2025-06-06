@@ -8,18 +8,15 @@
 const fs = require('fs');
 const path = require('path');
 
-console.log('🔍 Interview Lift Setup Verification\n');
 
 // Check if we're in the correct directory
 const packageJsonPath = path.join(process.cwd(), 'package.json');
 if (!fs.existsSync(packageJsonPath)) {
-    console.log('❌ Error: Run this script from the InterviewLift project root directory');
     process.exit(1);
 }
 
 // Check stt.json file
 const sttJsonPath = path.join(process.cwd(), 'stt.json');
-console.log('📄 Checking Google Speech-to-Text credentials...');
 
 if (fs.existsSync(sttJsonPath)) {
     try {
@@ -30,7 +27,6 @@ if (fs.existsSync(sttJsonPath)) {
         const missingFields = requiredFields.filter(field => !sttContent[field]);
         
         if (missingFields.length === 0) {
-            console.log('✅ stt.json file found and properly configured');
             console.log(`   Project ID: ${sttContent.project_id}`);
             console.log(`   Service Account: ${sttContent.client_email}`);
         } else {
@@ -50,7 +46,6 @@ if (fs.existsSync(sttJsonPath)) {
 
 // Check .env file
 const envPath = path.join(process.cwd(), '.env');
-console.log('\n🌍 Checking environment variables...');
 
 if (fs.existsSync(envPath)) {
     const envContent = fs.readFileSync(envPath, 'utf8');
@@ -68,7 +63,6 @@ if (fs.existsSync(envPath)) {
 
 // Check node_modules
 const nodeModulesPath = path.join(process.cwd(), 'node_modules');
-console.log('\n📦 Checking dependencies...');
 
 if (fs.existsSync(nodeModulesPath)) {
     console.log('✅ node_modules directory found');
@@ -79,7 +73,6 @@ if (fs.existsSync(nodeModulesPath)) {
 }
 
 // Check platform-specific requirements
-console.log('\n🖥️  Checking platform requirements...');
 const platform = process.platform;
 
 if (platform === 'darwin') {

@@ -34,11 +34,6 @@ class VoiceActivityDetector {
         this.totalFrames = 0;
         this.voiceFrames = 0;
         this.silenceFrames = 0;
-        
-        console.log('🎤 Voice Activity Detector initialized with audio buffering');
-        console.log(`📊 Config: energyThreshold=${this.energyThreshold}, silenceThreshold=${this.silenceThreshold}`);
-        console.log(`🎯 Audio buffer size: ${this.maxBufferSize} chunks (~${Math.round(this.maxBufferSize * 30)}ms)`);
-        console.log(`⏱️ Voice min duration: ${this.voiceMinDuration}ms (reduced for faster post-reset detection)`);
     }
     
     // Calculate RMS (Root Mean Square) energy of audio frame
@@ -100,7 +95,6 @@ class VoiceActivityDetector {
                 this.postResetBoost = false;
                 this.energyThreshold = this.originalEnergyThreshold;
                 this.silenceThreshold = this.originalSilenceThreshold;
-                console.log('🎤 VAD: Post-reset sensitivity boost ended, returning to normal thresholds');
             } else {
                 // Gradually increase thresholds back to normal
                 const boostFactor = 1.0 - (boostProgress * 0.5); // Start at 50% of normal, gradually increase
@@ -147,22 +141,18 @@ class VoiceActivityDetector {
         // State machine for voice activity
         if (frameHasVoice) {
             if (!this.isVoiceActive) {
-                // Potential voice start
                 if (this.voiceStartTime === 0) {
                     this.voiceStartTime = currentTime;
                 } else if (currentTime - this.voiceStartTime >= this.voiceMinDuration) {
-                    // Voice confirmed after minimum duration
                     this.isVoiceActive = true;
                     this.silenceStartTime = 0;
                     
-                    // CRITICAL: Send buffered chunks to capture start of speech
                     if (!this.bufferSentToSTT) {
-                        bufferedChunksToSend = [...this.audioBuffer]; // Copy entire buffer
+                        bufferedChunksToSend = [...this.audioBuffer];
                         this.bufferSentToSTT = true;
                         console.log(`🎤 VAD: Voice activity started - sending ${bufferedChunksToSend.length} buffered chunks to prevent word loss`);
                     }
                     
-                    // Send VAD event to renderer if available
                     if (global.mainWindow && global.mainWindow.webContents && !global.mainWindow.isDestroyed()) {
                         global.mainWindow.webContents.send('vad-voice-activity', { 
                             type: 'voice-started', 
@@ -171,21 +161,17 @@ class VoiceActivityDetector {
                     }
                 }
             } else {
-                // Voice continues
                 this.silenceStartTime = 0;
             }
         } else {
             if (this.isVoiceActive) {
-                // Potential voice end
                 if (this.silenceStartTime === 0) {
                     this.silenceStartTime = currentTime;
                 } else if (currentTime - this.silenceStartTime >= this.silenceMinDuration) {
-                    // Silence confirmed after minimum duration
                     this.isVoiceActive = false;
                     this.voiceStartTime = 0;
-                    this.bufferSentToSTT = false; // Reset for next voice activity
+                    this.bufferSentToSTT = false;
                     console.log('🎤 VAD: Voice activity stopped');
-                    // Send VAD event to renderer if available
                     if (global.mainWindow && global.mainWindow.webContents && !global.mainWindow.isDestroyed()) {
                         global.mainWindow.webContents.send('vad-voice-activity', { 
                             type: 'voice-stopped', 
@@ -194,29 +180,25 @@ class VoiceActivityDetector {
                     }
                 }
             } else {
-                // Continue silence
                 this.voiceStartTime = 0;
             }
         }
         
-        // Update statistics
         if (this.isVoiceActive || frameHasVoice) {
             this.voiceFrames++;
         } else {
             this.silenceFrames++;
         }
         
-        // Calculate confidence based on energy and characteristics
         let confidence = 0;
         if (frameHasVoice) {
             confidence = Math.min(1.0, smoothedEnergy / this.energyThreshold);
             if (hasVoiceCharacteristics) {
-                confidence *= 1.2; // Boost confidence for voice-like characteristics
+                confidence *= 1.2;
             }
             confidence = Math.min(1.0, confidence);
         }
         
-        // Log periodic statistics
         if (this.totalFrames % 1000 === 0) {
             const voicePercentage = ((this.voiceFrames / this.totalFrames) * 100).toFixed(1);
             console.log(`🎤 VAD Stats: ${voicePercentage}% voice activity (${this.voiceFrames}/${this.totalFrames} frames)`);
@@ -227,7 +209,7 @@ class VoiceActivityDetector {
             confidence: confidence,
             energy: smoothedEnergy,
             isActive: this.isVoiceActive,
-            bufferedChunks: bufferedChunksToSend, // Return buffered chunks when voice starts
+            bufferedChunks: bufferedChunksToSend,
             debug: {
                 rawEnergy: energy,
                 smoothedEnergy: smoothedEnergy,
@@ -239,9 +221,8 @@ class VoiceActivityDetector {
         };
     }
     
-    // Get current VAD statistics
     getStatistics() {
-        const totalFrames = this.totalFrames || 1; // Avoid division by zero
+        const totalFrames = this.totalFrames || 1;
         return {
             totalFrames: this.totalFrames,
             voiceFrames: this.voiceFrames,
@@ -252,30 +233,25 @@ class VoiceActivityDetector {
         };
     }
     
-    // Reset VAD state
     reset() {
         this.isVoiceActive = false;
         this.voiceStartTime = 0;
         this.silenceStartTime = 0;
         this.frameBuffer = [];
         
-        // Keep some energy history to maintain calibration after reset
-        // Only clear if we have too much history, otherwise keep recent samples
         if (this.energyHistory.length > 5) {
-            this.energyHistory = this.energyHistory.slice(-3); // Keep last 3 samples
+            this.energyHistory = this.energyHistory.slice(-3);
             console.log('🎤 VAD: Reset - keeping recent energy history for calibration');
         }
         
-        this.audioBuffer = []; // Clear audio buffer
-        this.bufferSentToSTT = false; // Reset buffer flag
+        this.audioBuffer = [];
+        this.bufferSentToSTT = false;
         
-        // Activate post-reset sensitivity boost
         this.postResetBoost = true;
         this.postResetFrameCount = 0;
-        this.energyThreshold = this.originalEnergyThreshold * 0.5; // Start with 50% of normal threshold
+        this.energyThreshold = this.originalEnergyThreshold * 0.5;
         this.silenceThreshold = this.originalSilenceThreshold * 0.5;
         
-        // Reset statistics but keep frame count for continuity
         const previousFrames = this.totalFrames;
         this.totalFrames = 0;
         this.voiceFrames = 0;
@@ -286,14 +262,32 @@ class VoiceActivityDetector {
         console.log(`🚀 VAD: Post-reset boost activated - 50% lower thresholds for ${this.postResetBoostDuration} frames`);
     }
     
-    // Adjust sensitivity dynamically
     adjustSensitivity(sensitivity) {
-        // sensitivity: 0.1 (very sensitive) to 1.0 (less sensitive)
         const baseSensitivity = 0.01;
         this.energyThreshold = baseSensitivity * sensitivity;
         this.silenceThreshold = this.energyThreshold * 0.5;
         console.log(`🎤 VAD: Sensitivity adjusted to ${sensitivity} (threshold: ${this.energyThreshold})`);
     }
+    
+    // --- New Test Method ---
+    static generateSineWave(freq = 440, sampleRate = 16000, durationMs = 100) {
+        const samplesCount = Math.floor(sampleRate * durationMs / 1000);
+        const buffer = Buffer.alloc(samplesCount * 2); // 16-bit PCM buffer
+        for (let i = 0; i < samplesCount; i++) {
+            const sample = Math.sin(2 * Math.PI * freq * i / sampleRate);
+            const intSample = Math.floor(sample * 32767);
+            buffer.writeInt16LE(intSample, i * 2);
+        }
+        return buffer;
+    }
 }
 
-module.exports = VoiceActivityDetector; 
+// --- Simple test to verify VAD on generated sine wave ---
+if (require.main === module) {
+    const vad = new VoiceActivityDetector();
+    const testTone = VoiceActivityDetector.generateSineWave();
+    const result = vad.processAudioChunk(testTone);
+    console.log('🎤 VAD test result on generated sine wave:', result);
+}
+
+module.exports = VoiceActivityDetector;

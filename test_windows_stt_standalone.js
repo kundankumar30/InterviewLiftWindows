@@ -15,7 +15,6 @@ class SimpleWindowsRecorder {
 
     async startRecording(onAudioData, onStatusUpdate, onError) {
         if (this.isRecording) {
-            console.log('Already recording');
             return false;
         }
 
@@ -26,7 +25,6 @@ class SimpleWindowsRecorder {
 
         return new Promise((resolve) => {
             try {
-                console.log(`Starting C# streaming recorder: ${this.recorderPath} --stream-transcription`);
                 
                 this.recorderProcess = spawn(this.recorderPath, ['--stream-transcription'], {
                     stdio: ['ignore', 'pipe', 'pipe']
@@ -47,7 +45,6 @@ class SimpleWindowsRecorder {
                         if (message) {
                             try {
                                 const jsonData = JSON.parse(message);
-                                console.log('C# Recorder Status:', jsonData);
                                 
                                 if (jsonData.code === "RECORDING_STARTED") {
                                     this.isRecording = true;
@@ -55,7 +52,6 @@ class SimpleWindowsRecorder {
                                     onStatusUpdate && onStatusUpdate(jsonData);
                                     resolve(true);
                                 } else if (jsonData.code === "SYSTEM_AUDIO_STREAMING_STARTED") {
-                                    console.log('✅ System audio streaming started successfully');
                                 } else if (jsonData.code && jsonData.code.includes('ERROR')) {
                                     console.error('C# Recorder Error:', jsonData);
                                     clearTimeout(startupTimer);
@@ -73,7 +69,6 @@ class SimpleWindowsRecorder {
                 this.recorderProcess.stdout.on('data', (audioDataChunk) => {
                     if (!hasReceivedAudio) {
                         hasReceivedAudio = true;
-                        console.log('✅ Successfully receiving audio data from C# recorder');
                     }
                     
                     onAudioData && onAudioData(audioDataChunk);
@@ -87,7 +82,6 @@ class SimpleWindowsRecorder {
                 });
 
                 this.recorderProcess.on('close', (code) => {
-                    console.log(`C# Recorder process exited with code ${code}`);
                     this.isRecording = false;
                     this.recorderProcess = null;
                 });
@@ -122,21 +116,91 @@ class SimpleWindowsRecorder {
     }
 }
 
-// Test the Windows STT integration
+// Google Speech Transcriber wrapper with auto restart logic
+class RestartingGoogleSpeechTranscriber extends GoogleSpeechTranscriber {
+    constructor(options) {
+        super(options);
+        this.restartIntervalMs = 55000; // 55 seconds before restart
+        this.restartTimer = null;
+        this.streamStarted = false;
+    }
+
+   async startStream() {
+    if (this.isStarted) {
+        return;
+    }
+    if (!this.speechClient) {
+        const success = await this.initializeClient();
+        if (!success) {
+            console.error('[STT_LOG] Client initialization failed');
+            return;
+        }
+    }
+    this.isStarted = true;
+    this.isReady = true;
+    this.onTranscription({ type: 'MODEL_READY_FOR_TRANSCRIPTION' });
+    this.startNewStream();
+}
+
+    setupRestartTimer() {
+        if (this.restartTimer) clearTimeout(this.restartTimer);
+        this.restartTimer = setTimeout(() => {
+            this.restartStream();
+        }, this.restartIntervalMs);
+    }
+
+    async restartStream() {
+        try {
+            this.streamStarted = false;
+            await this.stop();
+            await this.startStream();
+            this.streamStarted = true;
+        } catch (error) {
+            console.error('❌ Error restarting Google Speech stream:', error);
+        }
+    }
+
+async processAudioChunk(chunk) {
+    try {
+        if (!this.isReady || !this.speechClient || !this.stream) {
+            console.warn('[GoogleSpeechTranscriber] Cannot process chunk: transcriber not ready or stream not initialized');
+            return { success: false, reason: 'Transcriber not ready' };
+        }
+        // Assuming this.stream is the Google STT streaming client
+        this.stream.write(chunk);
+        return { success: true, chunkSize: chunk.length };
+    } catch (error) {
+        console.error('[GoogleSpeechTranscriber] Error processing audio chunk:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+    async stop() {
+        if (this.restartTimer) {
+            clearTimeout(this.restartTimer);
+            this.restartTimer = null;
+        }
+        this.streamStarted = false;
+        await super.stop();
+    }
+}
+
+// Generate a silent PCM chunk buffer matching your chunk size (320 bytes for 20ms @16kHz 16bit mono)
+function createSilentChunk() {
+    return Buffer.alloc(320, 0);
+}
+
 async function testWindowsSTT() {
-    console.log('🎯 Testing Windows C# Recorder + Google STT Integration');
-    
-    // Check if Google credentials exist
+
+    // Google credentials path
     const googleCredentialsPath = path.join(__dirname, 'stt.json');
     if (!fs.existsSync(googleCredentialsPath)) {
         console.error('❌ Google STT credentials not found at:', googleCredentialsPath);
-        console.log('Please place your Google Cloud Speech-to-Text credentials file as stt.json');
         return false;
     }
-    
-    console.log('✅ Found Google STT credentials at:', googleCredentialsPath);
-    
-    // Initialize components
+
+
+    // Init components
     const windowsRecorder = new SimpleWindowsRecorder();
     const voiceActivityDetector = new VoiceActivityDetector({
         sampleRate: 16000,
@@ -145,76 +209,123 @@ async function testWindowsSTT() {
         voiceMinDuration: 50,
         silenceMinDuration: 300
     });
-    
-    let googleSpeechTranscriber = null;
+
     let isGoogleSTTReady = false;
+
+    // Initialize Google Speech Transcriber with auto restart
+    let googleSpeechTranscriber;
+   try {
     
-    // Initialize Google Speech Transcriber
+    googleSpeechTranscriber = new RestartingGoogleSpeechTranscriber({
+        sampleRateHertz: 16000,
+        languageCode: 'en-US',
+        credentialsPath: googleCredentialsPath,
+        inputSampleRate: 16000,
+        inputChannels: 1,
+        inputFormat: 'INT16',
+
+        onTranscription: (data) => {
+            const timestamp = new Date().toISOString();
+
+
+            if (data.type === 'MODEL_READY_FOR_TRANSCRIPTION') {
+                isGoogleSTTReady = true;
+                return;
+            }
+
+            if (isGoogleSTTReady && data.text) {
+                const finalText = data.is_final ? ' (FINAL)' : ' (interim)';
+            }
+        },
+
+        onError: (message, error) => {
+            const timestamp = new Date().toISOString();
+            console.error(`[${timestamp}] ❌ Google Speech Error: ${message}`);
+            console.error(`[${timestamp}] ❌ Error Details:`, error);
+        }
+    });
+
+    await googleSpeechTranscriber.startStream();
+
+} catch (error) {
+    const timestamp = new Date().toISOString();
+    console.error(`[${timestamp}] ❌ Failed to initialize Google Speech Transcriber:`, error);
+    return false;
+}
+
+    // Silence chunk and timer management for sending keep-alive silence
+    const silenceChunk = createSilentChunk();
+    let silenceInterval = null;
+
+    function sendSilencePeriodically() {
+        if (silenceInterval) return;
+        silenceInterval = setInterval(() => {
+            if (googleSpeechTranscriber && isGoogleSTTReady) {
+                googleSpeechTranscriber.processAudioChunk(silenceChunk);
+            }
+        }, 20); // Send silence every 20ms
+    }
+
+    function stopSilencePeriodically() {
+        if (silenceInterval) {
+            clearInterval(silenceInterval);
+            silenceInterval = null;
+        }
+    }
+
+    // Process audio chunk with VAD and silence keep-alive
+ function processAudioChunkWithVAD(audioDataChunk) {
+    if (!voiceActivityDetector || !googleSpeechTranscriber || !isGoogleSTTModelReady) {
+        console.warn('VAD or STT not ready, skipping chunk processing');
+        return;
+    }
+    
+    console.log(`🎤 Processing chunk (size: ${audioDataChunk.length} bytes)`);
+    vadStats.totalChunks++;
+    
     try {
-        console.log('🔧 Initializing Google Speech-to-Text...');
-        googleSpeechTranscriber = new GoogleSpeechTranscriber({
-            sampleRateHertz: 16000,
-            languageCode: 'en-US',
-            credentialsPath: googleCredentialsPath,
-            inputSampleRate: 16000,
-            inputChannels: 1,
-            inputFormat: 'INT16',
-            onTranscription: (data) => {
-                if (data.type === 'MODEL_READY_FOR_TRANSCRIPTION') {
-                    console.log('✅ Google Speech-to-Text is ready');
-                    isGoogleSTTReady = true;
-                    return;
-                }
-                
-                if (isGoogleSTTReady && data.text) {
-                    const finalText = data.is_final ? ' (FINAL)' : ' (interim)';
-                    console.log('📝 Transcription:', data.text + finalText);
-                }
-            },
-            onError: (message, error) => {
-                console.error('❌ Google Speech Error:', message, error);
-            }
-        });
+        const vadResult = voiceActivityDetector.processAudioChunk(audioDataChunk);
+        console.log(`🎤 VAD Result: hasVoice=${vadResult.hasVoice}, bufferedChunks=${vadResult.bufferedChunks ? vadResult.bufferedChunks.length : 0}`);
         
-        await googleSpeechTranscriber.startStream();
-    } catch (error) {
-        console.error('❌ Failed to initialize Google Speech Transcriber:', error);
-        return false;
-    }
-    
-    // Process audio chunk with VAD filtering
-    function processAudioChunkWithVAD(audioDataChunk) {
-        if (!voiceActivityDetector || !googleSpeechTranscriber || !isGoogleSTTReady) {
-            return;
-        }
-        
-        try {
-            const vadResult = voiceActivityDetector.processAudioChunk(audioDataChunk);
-            
-            if (vadResult.hasVoice) {
-                // Voice detected - send to Google STT
+        if (vadResult.hasVoice) {
+            vadStats.voiceChunks++;
+            if (vadResult.bufferedChunks && vadResult.bufferedChunks.length > 0) {
+                // Limit to 10 buffered chunks to prevent lag
+                const maxBufferedChunks = 10;
+                const chunksToProcess = vadResult.bufferedChunks.slice(0, maxBufferedChunks);
+                console.log(`🎤 VAD: Voice activity started - sending ${chunksToProcess.length} buffered chunks (limited to ${maxBufferedChunks})`);
                 
-                // Send buffered chunks first if voice just started
-                if (vadResult.bufferedChunks && vadResult.bufferedChunks.length > 0) {
-                    console.log(`🎯 VAD: Sending ${vadResult.bufferedChunks.length} buffered chunks`);
-                    for (const bufferedChunk of vadResult.bufferedChunks) {
-                        googleSpeechTranscriber.processAudioChunk(bufferedChunk);
-                    }
+                // Batch chunks into a single buffer
+                const batchedChunk = Buffer.concat(chunksToProcess);
+                console.log(`🎤 VAD: Processing batched buffered chunk (size: ${batchedChunk.length} bytes)`);
+                const googleSTTResult = googleSpeechTranscriber.processAudioChunk(batchedChunk);
+                console.log(`🎤 VAD: Processed batched buffered chunk with Google STT, result:`, googleSTTResult);
+                if (!googleSTTResult || !googleSTTResult.success) {
+                    console.warn('Failed to process batched buffered chunk:', googleSTTResult);
+                    vadStats.discardedChunks += chunksToProcess.length;
                 } else {
-                    // Normal voice chunk processing
-                    googleSpeechTranscriber.processAudioChunk(audioDataChunk);
+                    vadStats.voiceChunks += chunksToProcess.length - 1; // Account for batched chunks
                 }
             }
-            // Silence chunks are discarded by VAD
-        } catch (error) {
-            console.error('🎤 VAD processing error:', error);
-            // Fallback: send to STT without VAD if there's an error
-            googleSpeechTranscriber.processAudioChunk(audioDataChunk);
+            console.log(`🎤 VAD: Processing current chunk (size: ${audioDataChunk.length} bytes)`);
+            const googleSTTResult = googleSpeechTranscriber.processAudioChunk(audioDataChunk);
+            console.log(`🎤 VAD: Processed current chunk with Google STT, result:`, googleSTTResult);
+            if (!googleSTTResult || !googleSTTResult.success) {
+                console.warn('Failed to process current chunk:', googleSTTResult);
+                vadStats.discardedChunks++;
+            }
+        } else {
+            vadStats.discardedChunks++;
+            vadStats.apiCallsSaved++;
+            console.log(`🔇 VAD: Discarded non-voice chunk (size: ${audioDataChunk.length} bytes)`);
         }
+    } catch (error) {
+        console.error('🎤 VAD processing error:', error);
+        googleSpeechTranscriber.processAudioChunk(audioDataChunk); // Fallback
+        vadStats.discardedChunks++;
     }
-    
+}
     // Start recording with callbacks
-    console.log('🎙️ Starting Windows audio recording...');
     const success = await windowsRecorder.startRecording(
         // onAudioData
         (audioData) => {
@@ -228,9 +339,7 @@ async function testWindowsSTT() {
         },
         // onStatusUpdate
         (status) => {
-            console.log('🔊 Windows Recorder Status:', status.code);
             if (status.code === "RECORDING_STARTED") {
-                console.log('✅ Audio recording started successfully');
             }
         },
         // onError
@@ -238,32 +347,25 @@ async function testWindowsSTT() {
             console.error('❌ Windows Recorder Error:', error);
         }
     );
-    
+
     if (success) {
-        console.log('✅ Windows STT integration test started successfully!');
-        console.log('🎤 Play some YouTube audio or speak into your microphone...');
-        console.log('📝 Transcriptions will appear above.');
-        console.log('Press Ctrl+C to stop the test.');
-        
-        // Keep the test running
-        const gracefulShutdown = () => {
-            console.log('\n🛑 Stopping test...');
-            
+       
+
+        // Graceful shutdown
+        const gracefulShutdown = async () => {
             if (windowsRecorder) {
                 windowsRecorder.stopRecording();
             }
-            
             if (googleSpeechTranscriber) {
-                googleSpeechTranscriber.stop();
+                await googleSpeechTranscriber.stop();
             }
-            
-            console.log('✅ Test completed successfully!');
+            stopSilencePeriodically();
             process.exit(0);
         };
-        
+
         process.on('SIGINT', gracefulShutdown);
         process.on('SIGTERM', gracefulShutdown);
-        
+
         return true;
     } else {
         console.error('❌ Failed to start Windows audio recording');
@@ -271,7 +373,7 @@ async function testWindowsSTT() {
     }
 }
 
-// Run the test
+// Run the test if this script is the main module
 if (require.main === module) {
     testWindowsSTT().catch(error => {
         console.error('❌ Test failed:', error);
@@ -279,4 +381,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { testWindowsSTT }; 
+module.exports = { testWindowsSTT };

@@ -17,13 +17,11 @@ require.cache[require.resolve('electron')] = {
 
 // Test the Windows STT integration
 async function testWindowsSTT() {
-    console.log('🎯 Testing Windows C# Recorder + Google STT Integration');
     
     // Check if Google credentials exist
     const googleCredentialsPath = path.join(__dirname, 'stt.json');
     if (!fs.existsSync(googleCredentialsPath)) {
         console.error('❌ Google STT credentials not found at:', googleCredentialsPath);
-        console.log('Please place your Google Cloud Speech-to-Text credentials file as stt.json');
         return false;
     }
     
@@ -31,12 +29,9 @@ async function testWindowsSTT() {
     const recorderPath = path.join(process.cwd(), 'src', 'windows', 'bin', 'x64', 'Debug', 'net8.0', 'win-x64', 'Recorder.exe');
     if (!fs.existsSync(recorderPath)) {
         console.error('❌ C# Recorder not found at:', recorderPath);
-        console.log('Please build the C# recorder first: cd src/windows && dotnet build -p:Platform=x64');
         return false;
     }
     
-    console.log('✅ Found C# Recorder at:', recorderPath);
-    console.log('✅ Found Google STT credentials at:', googleCredentialsPath);
     
     // Initialize components
     const windowsRecorder = new WindowsAudioRecorder();
@@ -53,7 +48,6 @@ async function testWindowsSTT() {
     
     // Initialize Google Speech Transcriber
     try {
-        console.log('🔧 Initializing Google Speech-to-Text...');
         googleSpeechTranscriber = new GoogleSpeechTranscriber({
             sampleRateHertz: 16000,
             languageCode: 'en-US',
@@ -63,14 +57,12 @@ async function testWindowsSTT() {
             inputFormat: 'INT16',
             onTranscription: (data) => {
                 if (data.type === 'MODEL_READY_FOR_TRANSCRIPTION') {
-                    console.log('✅ Google Speech-to-Text is ready');
                     isGoogleSTTReady = true;
                     return;
                 }
                 
                 if (isGoogleSTTReady && data.text) {
                     const finalText = data.is_final ? ' (FINAL)' : ' (interim)';
-                    console.log('📝 Transcription:', data.text + finalText);
                 }
             },
             onError: (message, error) => {
@@ -98,7 +90,6 @@ async function testWindowsSTT() {
                 
                 // Send buffered chunks first if voice just started
                 if (vadResult.bufferedChunks && vadResult.bufferedChunks.length > 0) {
-                    console.log(`🎯 VAD: Sending ${vadResult.bufferedChunks.length} buffered chunks`);
                     for (const bufferedChunk of vadResult.bufferedChunks) {
                         googleSpeechTranscriber.processAudioChunk(bufferedChunk);
                     }
@@ -127,9 +118,7 @@ async function testWindowsSTT() {
             }
         },
         onStatusUpdate: (status) => {
-            console.log('🔊 Windows Recorder Status:', status.code);
             if (status.code === "RECORDING_STARTED") {
-                console.log('✅ Audio recording started successfully');
             }
         },
         onError: (error) => {
@@ -138,18 +127,13 @@ async function testWindowsSTT() {
     });
     
     // Start recording
-    console.log('🎙️ Starting Windows audio recording...');
     const success = await windowsRecorder.startRecording();
     
     if (success) {
-        console.log('✅ Windows STT integration test started successfully!');
-        console.log('🎤 Play some YouTube audio or speak into your microphone...');
-        console.log('📝 Transcriptions will appear above.');
-        console.log('Press Ctrl+C to stop the test.');
+       
         
         // Keep the test running
         const gracefulShutdown = () => {
-            console.log('\n🛑 Stopping test...');
             
             if (windowsRecorder) {
                 windowsRecorder.stopRecording();
@@ -159,7 +143,6 @@ async function testWindowsSTT() {
                 googleSpeechTranscriber.stop();
             }
             
-            console.log('✅ Test completed successfully!');
             process.exit(0);
         };
         

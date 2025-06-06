@@ -280,7 +280,7 @@ window.addEventListener('DOMContentLoaded', () => {
         keySkills: keySkillsInput.value.trim(),
         // Hardcode to EN-IN
         uiLanguage: 'en',
-        transcriptionLanguage: 'en-IN',
+        transcriptionLanguage: 'en-US',
         aiLanguage: 'en'
       };
       // Store user data and navigate to overlay screen

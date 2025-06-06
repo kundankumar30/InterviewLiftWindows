@@ -69,19 +69,15 @@ const recorder = new PlatformRecorder();
 recorder.setCallbacks({
     onAudioData: (audioData) => {
         // Handle audio data (Buffer)
-        console.log('Received audio data:', audioData.length, 'bytes');
     },
     onVideoFrame: (frameData) => {
         // Handle video frame (base64 encoded image)
-        console.log('Received video frame:', frameData.imageData.length, 'chars');
     },
     onStatusUpdate: (status) => {
         // Handle status updates
-        console.log('Status:', status.code);
     },
     onError: (error) => {
         // Handle errors
-        console.error('Error:', error.message);
     }
 });
 
@@ -95,7 +91,6 @@ if (!permissionResult.granted) {
 // Start recording
 const started = await recorder.startRecording();
 if (started) {
-    console.log('Recording started successfully');
     
     // Stop after 10 seconds
     setTimeout(() => {

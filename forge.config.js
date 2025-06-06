@@ -105,7 +105,6 @@ module.exports = {
   ],
   hooks: {
     prePackage: async (forgeConfig, platform, arch) => {
-      console.log(`📦 Pre-package hook: Ensuring FFmpeg is available for ${platform}-${arch}`);
       
       const FFmpegDownloader = require('./scripts/download-ffmpeg.js');
       const downloader = new FFmpegDownloader();
@@ -121,7 +120,6 @@ module.exports = {
           throw new Error('FFmpeg verification failed');
         }
         
-        console.log('✅ FFmpeg is ready for packaging');
       } catch (error) {
         console.error('❌ FFmpeg setup failed:', error.message);
         throw error;
