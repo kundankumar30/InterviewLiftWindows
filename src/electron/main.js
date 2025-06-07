@@ -679,6 +679,10 @@ ipcMain.handle('clerk-get-token', async (event) => {
   try {
     const clerkService = require('./utils/clerk-service');
     const token = await clerkService.getAuthToken();
+    if (!token) {
+      throw new Error('No Clerk token available');
+    }
+    console.log('✅ Successfully retrieved Clerk token:', token);
     return { success: true, token };
   } catch (error) {
     console.error('Failed to get Clerk token:', error);

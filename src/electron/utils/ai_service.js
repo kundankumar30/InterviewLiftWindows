@@ -7,7 +7,7 @@ function getTextPrompt(jobRole, keySkills, context) {
     return context.trim();
 }
 
-// Get the system prompt for text-based interview processing
+// Get the system prompt for text-based interview processing (INITIALIZATION ONLY)
 function getSystemPrompt(jobRole, keySkills) {
     return `**Master Prompt for Speech-Based Interview Question Processing**
 
@@ -40,7 +40,7 @@ function getSystemPrompt(jobRole, keySkills) {
    * imported library/module (what it is and why it's used in same line of import.
    * Every function (its purpose, parameters, and return value in short) at the start of function.
 
-* If a specific programming language is mentioned or implied by the question or context, use that language. Otherwise, use a commonly accepted language relevant to the Job Role and Key Skills.
+* If a specific programming language is mentioned or implied by the question or context, use a commonly accepted language relevant to the Job Role and Key Skills.
 
 **C. Other Question Types:**
 * If the question does not clearly fall into the above categories, use your best judgment to provide the most helpful and accurate answer.
@@ -49,10 +49,17 @@ function getSystemPrompt(jobRole, keySkills) {
 * **Clarity and Precision:** Ensure your answers are clear, precise, and directly address the extracted question.
 * **Focus on Accuracy:** Double-check the accuracy of your answers, especially for coding and technical questions.
 
-** Your response must ONLY be the answer itself, formatted according to the requirements for the identified question type. Do not include any other text, explanation, preamble, or confirmation (such as repeating the job role, key skills, the extracted question, or the question type). For example, if the question type is Subjective/Behavioral, provide ONLY the bullet points. If it's a Coding question, provide ONLY the Markdown code block.`;
+** Your response must ONLY be the answer itself, formatted according to the requirements for the identified question type. Do not include any other text, explanation, preamble, or confirmation (such as repeating the job role, key skills, the extracted question, or the question type). For example, if the question type is Subjective/Behavioral, provide ONLY the bullet points. If it's a Coding question, provide ONLY the Markdown code block.
+
+**REMEMBER:** I am your interview assistant. I will send you transcript segments. Always respond with helpful interview answers based on my Job Role and Key Skills.`;
 }
 
-// Screenshot analysis prompt
+// Get only the context text for subsequent calls (NO job role/skills repeated)
+function getContextOnlyPrompt(context) {
+    return context.trim();
+}
+
+// Screenshot analysis prompt (used for one-time screenshot calls)
 function getScreenshotPrompt(jobRole, keySkills) {
     return `**Master Prompt for Interview Question Processing from Screenshots**
 
@@ -106,7 +113,8 @@ Do not include any data or other irrelevant information like what you understood
 }
 
 module.exports = {
-    getTextPrompt,
-    getSystemPrompt,
+    getTextPrompt, // For backward compatibility
+    getSystemPrompt, // For system prompt initialization
+    getContextOnlyPrompt, // For subsequent calls without job context
     getScreenshotPrompt
 }; 
