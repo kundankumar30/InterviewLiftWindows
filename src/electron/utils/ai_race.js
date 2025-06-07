@@ -88,7 +88,8 @@ async function raceTextResponse(jobRole, keySkills, context, chatHistory, onChun
                     chatHistory,
                     (content, isFirstChunk) => handleFirstChunk(content, isFirstChunk, 'Gemini'),
                     (text, prompt) => handleComplete(text, prompt, 'Gemini'),
-                    (error) => handleError(error, 'Gemini')
+                    (error) => handleError(error, 'Gemini'),
+                    controller.signal
                 );
             } catch (error) {
                 if (!controller.signal.aborted) {
@@ -151,7 +152,8 @@ async function raceTextResponse(jobRole, keySkills, context, chatHistory, onChun
             chatHistory,
                     (content, isFirstChunk) => handleFirstChunk(content, isFirstChunk, 'Cerebras'),
                     (text, prompt) => handleComplete(text, prompt, 'Cerebras'),
-                    (error) => handleError(error, 'Cerebras')
+                    (error) => handleError(error, 'Cerebras'),
+                    controller.signal
                 );
             } catch (error) {
                 if (!controller.signal.aborted) {

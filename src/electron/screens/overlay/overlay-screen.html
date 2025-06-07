@@ -1,18 +1,35 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Interview Assistant Overlay</title>
-
-  <!-- Tailwind (JIT) -->
-  <script src="https://cdn.tailwindcss.com"></script>
-
-  <!-- Highlight.js  -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js" defer></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js" defer></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js" defer></script>
+    <meta charset="UTF-8">
+     <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self';
+        script-src 'self' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com 'unsafe-inline' 'unsafe-eval';
+        style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com;
+        font-src 'self' https://fonts.gstatic.com;
+        connect-src 'self' ws: wss: https://cdnjs.cloudflare.com https://cdn.tailwindcss.com https://fonts.googleapis.com https://fonts.gstatic.com;
+        img-src 'self' data: https:;
+        object-src 'none';
+        frame-ancestors 'none';
+        base-uri 'self';
+        form-action 'self'
+    ">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interview Assistant Overlay</title>
+    
+    <!-- Load Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Load highlight.js and its style -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    
+    <!-- Load marked library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
+    
+    <!-- Load highlight.js languages -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/java.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/cpp.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/csharp.min.js"></script>
@@ -25,88 +42,1010 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/typescript.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/shell.min.js"></script>
-  <!-- Marked.js -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js" defer></script>
-
-  <!-- Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
-  <!-- Custom Styles -->
-  <link rel="stylesheet" href="./overlay-screen.css" />
-</head>
-
-<body class="bg-transparent font-inter">
-  <div class="overlay-container">
-    <div class="header-bar flex justify-between p-2 bg-gray-800 text-white">
-      <div id="screenshotsContainer" class="screenshots-container"></div>
-      <div class="hotkey-hints-container text-sm space-x-2">
-        <span><kbd>⌘</kbd> + <kbd>H</kbd>: Screenshot</span>
-        <span><kbd>⌘</kbd> + <kbd>↵</kbd>: Solve</span>
-        <span><kbd>⌘</kbd> + <kbd>K</kbd>: Clear</span>
-        <span><kbd>⌘</kbd> + <kbd>L</kbd>: Mute</span>
-        <span><kbd>⌘</kbd> + <kbd>B</kbd>: Hide</span>
-        <span><kbd>⌘</kbd> + <kbd>Q</kbd>: Quit</span>
-      </div>
-      <div class="screen-protection-toggle flex items-center gap-2">
-        <span>Protection:</span>
-        <label class="toggle-switch">
-          <input type="checkbox" id="screenProtectionToggle" checked />
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-    </div>
-
-    <span id="status-dot" class="status-dot-corner bg-gray-500"></span>
-
-    <div class="main-content-split flex">
-      <div id="transcriptArea" class="transcript-area w-1/2 p-2 overflow-auto bg-gray-900 text-white">
-        <p class="sticky-title font-semibold mb-2">Transcript:</p>
-        <div id="transcriptContent" class="prose prose-invert"></div>
-      </div>
-      <div id="suggestionsArea" class="suggestions-area w-1/2 p-2 overflow-auto bg-gray-800 text-white">
-        <p class="sticky-title font-semibold mb-2">AI Suggestions:</p>
-        <div id="suggestionsContent" class="prose prose-invert"></div>
-      </div>
-    </div>
-
-    <div class="status-bar flex items-center justify-between bg-gray-900 text-gray-400 p-2 text-xs">
-      <span id="status-text">Initializing...</span>
-      <div id="footerThumbnailContainer">
-        <img id="footerThumbnail" class="footer-thumbnail w-16 h-10 object-cover" alt="Screen capture" />
-      </div>
-    </div>
-  </div>
-
-  <!-- Highlight + Marked init script -->
-  <script defer>
-    window.addEventListener('DOMContentLoaded', () => {
-      hljs.highlightAll();
-
-      if (typeof marked !== 'undefined') {
-        marked.setOptions({
-          gfm: true,
-          breaks: true,
-          highlight: function(code, lang) {
-            try {
-              return hljs.highlight(code, { language: lang || 'plaintext', ignoreIllegals: true }).value;
-            } catch (_) {
-              return code;
-            }
-          }
-        });
-      }
-
-      // Optional: setup render function
-      window.renderMarkdownToHTML = (markdown, targetId) => {
-        const target = document.getElementById(targetId);
-        if (target && typeof marked !== 'undefined') {
-          target.innerHTML = marked.parse(markdown);
+    
+    <!-- Load consolidated overlay styling system -->
+    <script>
+        try {
+            const overlayRendererStyles = require('../../utils/overlay-renderer-styles');
+            window.overlayRendererStyles = new overlayRendererStyles.OverlayRendererStyles();
+            
+            // Initialize styles when DOM is ready with fallback styling
+            document.addEventListener('DOMContentLoaded', async () => {
+                console.log('🎨 Initializing overlay styles on DOM ready...');
+                try {
+                    await window.overlayRendererStyles.initialize();
+                    console.log('✅ Overlay styles initialized successfully');
+                } catch (error) {
+                    console.error('❌ Failed to initialize overlay styles, applying fallback:', error);
+                    // Apply fallback styles directly
+                    applyFallbackTransparency();
+                }
+            });
+        } catch (error) {
+            console.error('❌ Failed to load overlay renderer styles:', error);
+            // Apply fallback styles if module loading fails
+            document.addEventListener('DOMContentLoaded', () => {
+                applyFallbackTransparency();
+            });
         }
-      };
-    });
-  </script>
+        
+        // Fallback transparency application function
+        function applyFallbackTransparency() {
+            console.log('🔄 Applying fallback transparency settings...');
+            
+            const transcriptArea = document.getElementById('transcriptArea');
+            const suggestionsArea = document.getElementById('suggestionsArea');
+            const headerBar = document.querySelector('.header-bar');
+            const statusBar = document.querySelector('.status-bar');
+            
+            if (transcriptArea) {
+                transcriptArea.style.backgroundColor = 'rgba(26, 32, 44, 0.3)'; // 70% transparency
+                transcriptArea.style.backdropFilter = 'blur(12px) saturate(120%)';
+                transcriptArea.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+                transcriptArea.style.color = '#ffffff'; // Bright white text
+                console.log('✅ Applied fallback styles to transcript area');
+            }
+            
+            if (suggestionsArea) {
+                suggestionsArea.style.backgroundColor = 'rgba(26, 32, 44, 0.75)'; // 25% transparency (less transparent)
+                suggestionsArea.style.backdropFilter = 'blur(20px) saturate(140%)'; // Increased blur and saturation
+                suggestionsArea.style.border = '1px solid rgba(255, 255, 255, 0.12)';
+                suggestionsArea.style.borderLeft = '2px solid rgba(255, 255, 255, 0.15)';
+                suggestionsArea.style.color = '#f3f4f6';
+                console.log('✅ Applied fallback styles to suggestions area');
+            }
+            
+            if (headerBar) {
+                headerBar.style.backgroundColor = 'rgba(0, 0, 0, 0.2)';
+                headerBar.style.backdropFilter = 'blur(20px) saturate(150%)';
+                headerBar.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+                headerBar.style.color = '#ffffff';
+                console.log('✅ Applied fallback styles to header bar');
+            }
+            
+            if (statusBar) {
+                statusBar.style.backgroundColor = 'rgba(0, 0, 0, 0.2)';
+                statusBar.style.backdropFilter = 'blur(20px) saturate(150%)';
+                statusBar.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+                console.log('✅ Applied fallback styles to status bar');
+            }
+            
+            console.log('🎨 Fallback transparency application complete');
+        }
+        
+        // Emergency immediate styling - apply as soon as DOM exists
+        function applyImmediateStyles() {
+            console.log('🚨 Applying emergency immediate styles...');
+            const transcript = document.querySelector('.transcript-area');
+            const suggestions = document.querySelector('.suggestions-area');
+            
+            if (transcript) {
+                transcript.style.backgroundColor = 'rgba(26, 32, 44, 0.3) !important';
+                transcript.style.backdropFilter = 'blur(12px) saturate(120%) !important';
+                transcript.style.color = '#ffffff !important';
+                console.log('✅ Emergency styles applied to transcript');
+            }
+            
+            if (suggestions) {
+                suggestions.style.backgroundColor = 'rgba(26, 32, 44, 0.75) !important';
+                suggestions.style.backdropFilter = 'blur(20px) saturate(140%) !important';
+                suggestions.style.color = '#f3f4f6 !important';
+                console.log('✅ Emergency styles applied to suggestions');
+            }
+        }
+        
+        // Apply styles immediately when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', applyImmediateStyles);
+        } else {
+            applyImmediateStyles();
+        }
+    </script>
+    
+    <!-- Load fonts with preload for faster loading -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Initialize libraries -->
+    <script>
+        // Initialize marked
+        if (typeof marked === 'undefined') {
+            console.error('Marked library failed to load or is not yet available');
+        } else {
+            // Initialize marked with enhanced syntax highlighting
+            marked.use({
+                gfm: true,
+                breaks: true,
+                headerIds: false,
+                mangle: false,
+                highlight: function(code, lang) {
+                    console.log('🎨 marked.highlight: Processing code block with language:', lang);
+                    
+                    if (typeof hljs !== 'undefined') {
+                        let highlightedCode = '';
+                        let detectedLang = lang;
+                        
+                        try {
+                            if (lang && hljs.getLanguage(lang)) {
+                                // Use specified language
+                                highlightedCode = hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
+                                console.log('✅ marked.highlight: Successfully highlighted with specified language:', lang);
+                            } else {
+                                // Try to auto-detect language
+                                const result = hljs.highlightAuto(code, ['javascript', 'python', 'java', 'cpp', 'csharp', 'ruby', 'go', 'sql', 'html', 'css', 'json']);
+                                highlightedCode = result.value;
+                                detectedLang = result.language || 'text';
+                                console.log('🔍 marked.highlight: Auto-detected language:', detectedLang, 'confidence:', result.relevance);
+                            }
+                            
+                            // Add language attribute for styling
+                            return `<code class="hljs language-${detectedLang}" data-language="${detectedLang}">${highlightedCode}</code>`;
+                            
+                        } catch (e) {
+                            console.error('❌ marked.highlight: Error highlighting code:', e);
+                            // Fallback to basic highlighting
+                            try {
+                                const fallback = hljs.highlightAuto(code);
+                                return `<code class="hljs" data-language="${fallback.language || 'text'}">${fallback.value}</code>`;
+                            } catch (fallbackError) {
+                                console.error('❌ marked.highlight: Fallback also failed:', fallbackError);
+                                return `<code class="hljs" data-language="text">${code}</code>`;
+                            }
+                        }
+                    } else {
+                        console.warn('⚠️ marked.highlight: hljs not available, returning plain code');
+                        return `<code data-language="${lang || 'text'}">${code}</code>`;
+                    }
+                },
+                renderer: {
+                    code(code, infostring, escaped) {
+                        const lang = (infostring || '').match(/\S*/)[0];
+                        const langAttr = lang ? ` data-language="${lang}"` : '';
+                        
+                        if (this.options.highlight) {
+                            const out = this.options.highlight(code, lang);
+                            if (out != null && out !== code) {
+                                escaped = true;
+                                code = out;
+                            }
+                        }
+                        
+                        return `<pre${langAttr}><code class="hljs ${lang ? `language-${lang}` : ''}"${langAttr}>${escaped ? code : escape(code)}</code></pre>\n`;
+                    }
+                }
+            });
+            console.log('✅ Marked initialized successfully with enhanced syntax highlighting');
+        }
+        
+        // Escape function for HTML
+        function escape(html) {
+            return html
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
 
-  <script src="overlay-renderer.js" defer></script>
+        // Initialize highlight.js with enhanced configuration
+        if (typeof hljs !== 'undefined') {
+            hljs.configure({
+                ignoreUnescapedHTML: true,
+                classPrefix: 'hljs-',
+                languages: ['javascript', 'python', 'java', 'cpp', 'csharp', 'ruby', 'go', 'sql', 'html', 'css', 'json', 'typescript', 'bash', 'shell']
+            });
+            
+            // Register language aliases for better detection
+            hljs.registerAliases(['js', 'jsx'], { languageName: 'javascript' });
+            hljs.registerAliases(['ts', 'tsx'], { languageName: 'typescript' });
+            hljs.registerAliases(['py'], { languageName: 'python' });
+            hljs.registerAliases(['c++', 'cc', 'h++', 'hpp'], { languageName: 'cpp' });
+            hljs.registerAliases(['c#', 'cs'], { languageName: 'csharp' });
+            hljs.registerAliases(['rb'], { languageName: 'ruby' });
+            hljs.registerAliases(['golang'], { languageName: 'go' });
+            hljs.registerAliases(['sh', 'zsh'], { languageName: 'bash' });
+            
+            console.log('✅ Highlight.js initialized successfully with enhanced language support');
+            console.log('📝 Supported languages:', hljs.listLanguages());
+        } else {
+            console.error('❌ Highlight.js failed to load or is not yet available');
+        }
+    </script>
+
+    <style>
+        /* Basic transparent overlay styling */
+        
+        /* SCREEN PROTECTION: Hide from print and screenshots */
+        @media print {
+            * { display: none !important; }
+        }
+        
+        /* Critical CSS - Applied immediately for instant transparency */
+        html, body { 
+            background-color: transparent !important; 
+            margin: 0; 
+            padding: 0; 
+            visibility: visible !important;
+            /* SCREEN PROTECTION: Prevent selection and interaction recording */
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
+            pointer-events: none !important; /* Make body click-through */
+        }
+        
+        /* Use Inter font */
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: transparent !important; 
+            color: #2d3748; /* Much darker color for better visibility on white */
+            overflow: hidden; 
+            height: 100vh; 
+            width: 100vw; 
+            user-select: none; 
+            -webkit-user-select: none; 
+            font-size: 15px; 
+            line-height: 1.4;
+        }
+        .overlay-container { 
+            /* Background managed by OverlayStyleManager - no hardcoded transparency */
+            border-radius: 0; 
+            width: 100%; 
+            height: 100%; 
+            overflow: hidden; 
+            display: flex; 
+            flex-direction: column; 
+            position: relative; 
+            visibility: visible !important;
+            pointer-events: none !important; /* Make container click-through */
+        }
+        /* Header Bar */
+        .header-bar { 
+            padding: 0.25rem 0.8rem; 
+            background-color: rgba(0, 0, 0, 0.2) !important; /* More transparent for glass effect */
+            backdrop-filter: blur(20px) saturate(150%); /* Glass blur effect */
+            border: 1px solid rgba(255, 255, 255, 0.1); /* Subtle glass border */
+            color: #ffffff; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            flex-wrap: wrap; 
+            flex-shrink: 0; 
+            border-bottom: 1px solid rgba(255, 255, 255, 0.15); /* Enhanced separator */
+            min-height: 40px; 
+            height: 40px; 
+            pointer-events: none !important; /* Make header click-through */
+            -webkit-app-region: no-drag; 
+            border-top-left-radius: 0.75rem; 
+            border-top-right-radius: 0.75rem; 
+        }
+        .hotkey-hints-container { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 0.6rem; -webkit-app-region: no-drag; height: 100%; pointer-events: none !important; }
+        .hotkey-hints-container span { white-space: nowrap; display: inline-flex; align-items: center; gap: 0.2rem; -webkit-app-region: no-drag; pointer-events: none !important; }
+        .hotkey-hints-container kbd { background-color: rgba(71, 85, 105, 0.7); border: 1px solid rgba(100, 116, 139, 0.5); border-bottom-width: 2px; padding: 0.1rem 0.35rem; border-radius: 0.375rem; font-size: 8px; color: #ffffff; display: inline-block; line-height: 1; -webkit-app-region: no-drag; pointer-events: none !important; }
+        .thumbnail-container { 
+            display: flex; 
+            gap: 0.3rem; 
+            height: 32px; 
+            align-items: center;
+            min-width: 50px;
+            max-width: 150px;
+            overflow: hidden;
+            -webkit-app-region: no-drag;
+            pointer-events: none !important;
+        }
+        .thumbnail-container video { 
+            height: 100%; 
+            width: auto; 
+            border-radius: 0.25rem; 
+            border: 1px solid rgba(255, 255, 255, 0.2); 
+            object-fit: contain;
+            background-color: rgba(0, 0, 0, 0.2);
+            pointer-events: none !important;
+        }
+        #thumbnailContainer { 
+            opacity: 1; 
+            transition: opacity 0.3s ease-in-out; 
+            pointer-events: none !important; /* Make thumbnail container click-through */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Relocated Status Dot */
+        .status-dot-corner { position: absolute; top: 0.4rem; right: 0.75rem; width: 8px; height: 8px; border-radius: 50%; z-index: 20; border: 1px solid rgba(0,0,0,0.5); pointer-events: none !important; }
+        /* Two-column split */
+        .main-content-split { 
+            display: flex; 
+            flex-grow: 1; 
+            overflow: hidden; 
+            /* Background managed by OverlayStyleManager - no hardcoded transparency */
+            pointer-events: none !important; /* Make main content click-through */
+        }
+        .transcript-area { 
+            width: 40%; 
+            padding: 0.75rem; 
+            padding-right: 0.5rem; /* Reduce right padding to accommodate scrollbar */
+            overflow-y: auto; 
+            pointer-events: auto !important; /* Make transcript area interactive for scrollbar */
+            position: relative;
+            scroll-behavior: smooth; /* Add smooth scrolling */
+            /* All glass effect styles (background, transparency, borders) injected dynamically by OverlayStyleManager */
+            border-radius: 0;
+            margin: 0;
+            user-select: none !important; /* Disable text selection but allow scrolling */
+            -webkit-user-select: none !important;
+            -webkit-app-region: no-drag !important; /* Ensure no drag interference */
+        }
+        .suggestions-area { 
+            width: 60%; 
+            padding: 0.75rem; 
+            padding-right: 0.5rem; /* Reduce right padding to accommodate scrollbar */
+            overflow-y: auto; 
+            pointer-events: auto !important; /* Make suggestions area interactive for scrollbar */
+            position: relative; 
+            /* All glass effect styles (background, transparency, borders) injected dynamically by OverlayStyleManager */
+            border-radius: 0; 
+            margin: 0; 
+            user-select: none !important; /* Disable text selection but allow scrolling */
+            -webkit-user-select: none !important;
+            -webkit-app-region: no-drag !important; /* Ensure no drag interference */
+        }
+        /* Custom Scrollbar */
+        .transcript-area::-webkit-scrollbar, .suggestions-area::-webkit-scrollbar { 
+            width: 12px; 
+            background: transparent;
+        }
+        .transcript-area::-webkit-scrollbar-track, .suggestions-area::-webkit-scrollbar-track { 
+            background: rgba(30, 41, 59, 0.3); 
+            border-radius: 6px; 
+            margin: 2px;
+        }
+        .transcript-area::-webkit-scrollbar-thumb, .suggestions-area::-webkit-scrollbar-thumb { 
+            background-color: rgba(160, 174, 192, 0.6); 
+            border-radius: 6px; 
+            border: 2px solid transparent;
+            background-clip: content-box;
+            min-height: 20px;
+        }
+        
+        /* Enhanced scrollbar for AI suggestions area */
+        .suggestions-area::-webkit-scrollbar { 
+            width: 14px; 
+            background: rgba(26, 32, 44, 0.2);
+        }
+        .suggestions-area::-webkit-scrollbar-track { 
+            background: rgba(30, 41, 59, 0.4); 
+            border-radius: 7px; 
+            margin: 3px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .suggestions-area::-webkit-scrollbar-thumb { 
+            background: linear-gradient(180deg, rgba(160, 174, 192, 0.8), rgba(100, 116, 139, 0.8)); 
+            border-radius: 7px; 
+            border: 2px solid rgba(26, 32, 44, 0.3);
+            background-clip: content-box;
+            min-height: 30px;
+            cursor: pointer;
+        }
+        .suggestions-area::-webkit-scrollbar-thumb:hover { 
+            background: linear-gradient(180deg, rgba(160, 174, 192, 1), rgba(100, 116, 139, 1)); 
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+        .suggestions-area::-webkit-scrollbar-thumb:active { 
+            background: linear-gradient(180deg, rgba(203, 213, 225, 0.9), rgba(148, 163, 184, 0.9)); 
+        }
+        .suggestions-area::-webkit-scrollbar-corner {
+            background: transparent;
+        }
+        
+        /* Make entire scrollbar interactive - container, track, and thumbs */
+        .suggestions-area::-webkit-scrollbar,
+        .suggestions-area::-webkit-scrollbar-track,
+        .suggestions-area::-webkit-scrollbar-thumb,
+        .transcript-area::-webkit-scrollbar,
+        .transcript-area::-webkit-scrollbar-track,
+        .transcript-area::-webkit-scrollbar-thumb {
+            pointer-events: auto !important; /* Make all scrollbar parts interactive */
+            -webkit-app-region: no-drag !important;
+            position: relative;
+            z-index: 9999;
+        }
+        
+        /* Fast streaming styles for improved performance */
+        .inline-code {
+            background: rgba(255, 255, 255, 0.1) !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            border-radius: 3px !important;
+            padding: 2px 4px !important;
+            color: #f7fafc !important;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
+        }
+        
+        .streaming-code {
+            background: rgba(0, 0, 0, 0.3) !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            border-radius: 6px !important;
+            padding: 12px !important;
+            color: #e2e8f0 !important;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
+            white-space: pre-wrap !important;
+            word-wrap: break-word !important;
+            word-break: break-all !important;
+            overflow-wrap: break-word !important;
+            overflow-x: auto !important;
+            max-width: 100% !important;
+        }
+        
+        /* COMPREHENSIVE LINE WRAPPING - CRITICAL FOR LONG CONTENT */
+        .suggestion-container,
+        .suggestion-content,
+        .transcript-area,
+        .suggestions-area {
+            word-wrap: break-word !important;
+            word-break: break-word !important;
+            overflow-wrap: break-word !important;
+            hyphens: auto !important;
+            -webkit-hyphens: auto !important;
+            -moz-hyphens: auto !important;
+            -ms-hyphens: auto !important;
+        }
+        
+        /* Code block wrapping - preserve functionality but ensure wrapping */
+        .suggestion-container pre,
+        .suggestion-container code,
+        .hljs {
+            white-space: pre-wrap !important;
+            word-wrap: break-word !important;
+            word-break: break-all !important;
+            overflow-wrap: break-word !important;
+            max-width: 100% !important;
+            overflow-x: auto !important;
+            background: rgba(0, 0, 0, 0.3) !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            border-radius: 6px !important;
+            padding: 8px 12px !important;
+            color: #ffffff !important;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
+            line-height: 1.4 !important;
+        }
+        
+        /* EMERGENCY COMMENT VISIBILITY FIX - MAXIMUM PRIORITY */
+        .hljs-comment,
+        .hljs-comment *,
+        .suggestion-container .hljs-comment,
+        .suggestions-area .hljs-comment,
+        .transcript-area .hljs-comment,
+        code .hljs-comment,
+        pre .hljs-comment {
+            color: #d1d5db !important;
+            background: transparent !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            font-weight: normal !important;
+            text-decoration: none !important;
+        }
+        
+        /* Long URLs and strings wrapping */
+        .suggestion-container a,
+        .suggestion-container span,
+        .transcript-area span {
+            word-break: break-all !important;
+            overflow-wrap: break-word !important;
+        }
+        
+        /* Table cell wrapping */
+        .suggestion-container td,
+        .suggestion-container th {
+            word-wrap: break-word !important;
+            word-break: break-word !important;
+            overflow-wrap: break-word !important;
+            max-width: 200px !important;
+        }
+        
+        /* Specific cursor styles for different scrollbar parts */
+        .suggestions-area::-webkit-scrollbar-track,
+        .transcript-area::-webkit-scrollbar-track {
+            cursor: pointer; /* Clickable track for jumping */
+        }
+        
+        .suggestions-area::-webkit-scrollbar-thumb,
+        .transcript-area::-webkit-scrollbar-thumb {
+            cursor: grab; /* Draggable thumb */
+        }
+        
+        .suggestions-area::-webkit-scrollbar-thumb:active,
+        .transcript-area::-webkit-scrollbar-thumb:active {
+            cursor: grabbing; /* Active dragging */
+        }
+        
+        /* Content wrappers to make content click-through while keeping containers interactive for scrollbars */
+        #transcriptContent, #suggestionsContent {
+            pointer-events: none !important; /* Make all content click-through */
+            user-select: none !important;
+            -webkit-user-select: none !important;
+        }
+        
+        /* Ensure scrollbar areas remain interactive even when content is click-through */
+        .suggestions-area, .transcript-area {
+            overflow-y: auto !important;
+            pointer-events: auto !important; /* Override any click-through for scrolling */
+        }
+        
+        /* Keep ONLY scrollbars interactive - everything else is click-through */
+        /* Transcript lines */
+        .transcript-line { 
+            margin-bottom: 0.5rem; 
+            font-size: 15px; /* Increased font size to 15px */
+            line-height: 1.5; /* Increased line height */
+            padding: 0.2rem 0;
+            pointer-events: none !important; /* Make transcript lines click-through */
+            user-select: none !important; /* Disable text selection for click-through */
+            -webkit-user-select: none !important;
+        }
+        .transcript-line.user { 
+                            color: #00ff88; /* Darkest and brightest green - maximum visibility */
+            pointer-events: none !important;
+            user-select: none !important;
+        }
+        .transcript-line.interviewer { 
+                            color: #0088ff; /* Darker and brightest blue - maximum visibility */
+            pointer-events: none !important;
+            user-select: none !important;
+        }
+        .transcript-line strong { 
+            font-weight: 600; 
+            margin-right: 0.3em; 
+            color: #f3f4f6; /* Light gray - excellent on dark background */
+            pointer-events: none !important;
+            user-select: none !important;
+        }
+        /* Interim and Final transcript styles */
+        .transcript-line-interim {
+            color: #f3f4f6; /* Light gray - excellent on dark background */
+            position: relative;
+        }
+        .transcript-line-interim::after {
+            content: '';
+            display: inline-block;
+            width: 4px;
+            height: 4px;
+            background-color: #f3f4f6; /* Light gray dot for visibility on dark */
+            border-radius: 50%;
+            margin-left: 4px;
+            animation: pulse 1.5s infinite;
+            vertical-align: middle;
+        }
+        .transcript-line-final {
+            color: #f3f4f6; /* Light gray - excellent on dark background */
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+        /* AI suggestions container - OPTIMIZED FOR SPACE EFFICIENCY */
+        .suggestion-container {
+            padding: 0.4rem 0.5rem 0.5rem 0.5rem; /* Reduced from 0.6rem 0.6rem 0.8rem 0.6rem */
+            margin-bottom: 0.5rem; /* Reduced from 0.8rem */
+            line-height: 1.4; /* Reduced from 1.5 for better density */
+            word-wrap: break-word;
+            background-color: transparent;
+            box-shadow: none;
+            border: none;
+            border-bottom: 1px solid rgba(75, 85, 99, 0.3); /* Darker border for visibility */
+            font-size: 11px; /* Increased from previous size */
+            color: #f3f4f6; /* Light gray for excellent visibility on dark */
+            pointer-events: none !important; /* Make suggestion containers click-through */
+            user-select: none !important; /* Disable text selection for click-through */
+            -webkit-user-select: none !important;
+        }
+        #suggestionsContent > .suggestion-container:last-child { 
+            border-bottom: none; 
+            margin-bottom: 0; 
+            padding-bottom: 0.4rem; /* Reduced from 0.6rem */
+            pointer-events: none !important;
+            user-select: none !important;
+        }
+        .suggestion-title { 
+            font-weight: 500; 
+            color: #1f2937; /* Darker gray for better visibility */
+            margin-bottom: 0.2rem; /* Reduced from 0.25rem */
+            pointer-events: none !important;
+            user-select: none !important;
+            font-size: 15px; /* Increased font size to 15px */
+        }
+        .suggestion-container p {
+            margin-bottom: 0.3rem; /* Reduced from 0.4rem */
+            color: #374151; /* Dark gray for better visibility on white */
+            font-size: 15px; /* Increased font size to 15px */
+            line-height: 1.4; /* Reduced from 1.5 */
+            pointer-events: none !important; /* Make paragraphs click-through */
+            user-select: none !important; /* Disable text selection for click-through */
+            -webkit-user-select: none !important;
+        }
+        .suggestion-container ul, .suggestion-container ol {
+            margin: 0.3rem 0; /* Reduced from 0.4rem 0 */
+            padding-left: 1rem; /* Reduced from 1.25rem */
+            color: #374151; /* Dark gray for better visibility on white */
+            pointer-events: none !important; /* Make lists click-through */
+            user-select: none !important; /* Disable text selection for click-through */
+            -webkit-user-select: none !important;
+            font-size: 15px; /* Increased font size to 15px */
+        }
+        .suggestion-container li {
+            margin-bottom: 0.15rem; /* Reduced from 0.2rem */
+            color: #374151; /* Dark gray for better visibility on white */
+            font-size: 15px; /* Increased font size to 15px */
+            line-height: 1.4; /* Reduced from 1.5 */
+            pointer-events: none !important; /* Make list items click-through */
+            user-select: none !important; /* Disable text selection for click-through */
+            -webkit-user-select: none !important;
+        }
+        .suggestion-container blockquote {
+            border-left: 2px solid rgba(75, 85, 99, 0.4); /* Darker border for visibility */
+            margin: 0.3rem 0; /* Reduced from 0.4rem 0 */
+            padding-left: 0.5rem; /* Reduced from 0.6rem */
+            color: #374151; /* Dark gray for better visibility on white */
+            font-size: 15px; /* Increased font size to 15px */
+            line-height: 1.4; /* Reduced from 1.5 */
+            pointer-events: auto !important; /* Make blockquotes clickable */
+            user-select: text !important; /* Allow text selection */
+            -webkit-user-select: text !important;
+        }
+        .suggestion-container h1, .suggestion-container h2, .suggestion-container h3,
+        .suggestion-container h4, .suggestion-container h5, .suggestion-container h6 {
+            margin: 0.4rem 0 0.3rem 0; /* Reduced from 0.6rem 0 0.4rem 0 */
+            color: #1f2937; /* Dark gray for better visibility on white */
+            font-weight: 600;
+            font-size: 17px; /* Increased font size for headings */
+            line-height: 1.4; /* Reduced from 1.5 */
+            pointer-events: auto !important; /* Make headings clickable */
+            user-select: text !important; /* Allow text selection */
+            -webkit-user-select: text !important;
+        }
+        .suggestion-container table {
+            border-collapse: collapse;
+            margin: 0.3rem 0; /* Reduced from 0.4rem 0 */
+            font-size: 15px; /* Increased font size to 15px */
+            color: #374151; /* Dark gray for better visibility on white */
+            line-height: 1.4; /* Reduced from 1.5 */
+            pointer-events: auto !important; /* Make tables clickable */
+            user-select: text !important; /* Allow text selection */
+            -webkit-user-select: text !important;
+        }
+        .suggestion-container th, .suggestion-container td {
+            border: 1px solid rgba(75, 85, 99, 0.3); /* Darker border for visibility */
+            padding: 0.25rem 0.5rem; /* Reduced from 0.3rem 0.6rem */
+            color: #374151; /* Dark gray for better visibility on white */
+            font-size: 15px; /* Increased font size to 15px */
+            pointer-events: auto !important; /* Make table cells clickable */
+            user-select: text !important; /* Allow text selection */
+            -webkit-user-select: text !important;
+        }
+        .suggestion-container th {
+            background-color: rgba(75, 85, 99, 0.1); /* Darker background for visibility */
+            font-weight: 600;
+            color: #1f2937; /* Dark gray for better visibility on white */
+            pointer-events: auto !important; /* Make table headers clickable */
+            user-select: text !important; /* Allow text selection */
+            -webkit-user-select: text !important;
+        }
+        /* Inline code styling - dark background like in image */
+        .suggestion-container :not(pre) > code {
+            background-color: rgba(17, 24, 39, 0.8) !important; /* Dark semi-transparent like in image */
+            padding: 0.1rem 0.3rem;
+            border-radius: 0.2rem;
+            font-size: 13px; /* Slightly smaller for inline code */
+            color: #e5e7eb !important; /* Light gray for excellent visibility on dark */
+            border: 1px solid rgba(75, 85, 99, 0.3); /* Darker border for visibility */
+            pointer-events: auto !important; /* Make inline code clickable */
+            user-select: text !important; /* Allow text selection */
+            -webkit-user-select: text !important;
+        }
+        .code-explanation { 
+            color: #6b7280; /* Darker gray for better visibility */
+            margin-top: 0.3rem; 
+            padding-left: 0.25rem; 
+            font-size: 10px; /* Slightly smaller for explanations */
+            pointer-events: auto !important; /* Make code explanations clickable */
+            user-select: text !important; /* Allow text selection */
+            -webkit-user-select: text !important;
+        }
+        /* Status Bar */
+        .status-bar { 
+            padding: 0.25rem 1rem; 
+            /* Background styles will be managed by OverlayStyleManager */
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            flex-shrink: 0; 
+            pointer-events: auto; 
+            font-size: 9px; 
+            height: 40px; /* Same height as header */
+            border-top: 1px solid rgba(255, 255, 255, 0.15); /* Enhanced separator */
+            border-bottom-left-radius: 0.75rem; 
+            border-bottom-right-radius: 0.75rem;
+            gap: 1rem; /* Add gap between status indicators */
+        }
+        .status-indicator { 
+            display: flex; 
+            align-items: center; 
+            gap: 0.4rem; 
+            flex-shrink: 0; /* Don't shrink status indicators */
+        }
+        .status-text { 
+            min-width: 80px; 
+            color: #ffffff; 
+            white-space: nowrap; /* Prevent text wrapping */
+        }
+        
+        /* Screenshot processing indicator specific styles */
+        #screenshot-status-indicator {
+            animation: pulse-blue 1.5s ease-in-out infinite;
+        }
+        
+        #screenshot-status-dot {
+            animation: pulse-dot 1s ease-in-out infinite;
+        }
+        
+        @keyframes pulse-blue {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        @keyframes pulse-dot {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+        }
+        
+        /* Footer thumbnail */
+        .footer-thumbnail-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 32px;
+            width: 50%; /* Use 50% of footer for thumbnail */
+            border: none;
+            border-radius: 0;
+            background-color: transparent;
+            overflow: hidden;
+        }
+        .footer-thumbnail {
+            height: 30px;
+            width: auto;
+            object-fit: contain;
+            max-height: 30px;
+        }
+
+        /* Sticky titles */
+        .sticky-title { 
+            position: sticky; 
+            top: -0.75rem; 
+            display: inline-block; 
+            background-color: rgba(40, 44, 52, 0.3); 
+            color: #ffffff; 
+            padding: 0.3rem 0.7rem; 
+            margin-bottom: 0.6rem; 
+            border-radius: 0.375rem; 
+            font-weight: 600; 
+            z-index: 10; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2); 
+            backdrop-filter: blur(4px);
+            pointer-events: auto !important; /* Make sticky titles clickable */
+            user-select: text !important; /* Allow text selection */
+            -webkit-user-select: text !important;
+        }
+        
+        /* Screenshots container */
+        .screenshots-container {
+            display: flex;
+            gap: 6px;
+            height: 32px;
+            align-items: center;
+            justify-content: flex-start;
+            -webkit-app-region: no-drag;
+            min-width: 60px;
+            max-width: 200px;
+            overflow-x: auto;
+            padding: 2px;
+        }
+        .screenshot-thumbnail {
+            height: 28px;
+            width: auto;
+            max-width: 50px;
+            border-radius: 3px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            object-fit: contain;
+            background-color: rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .screenshot-thumbnail:hover {
+            transform: scale(1.05);
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+        
+        /* Notification styling */
+        .notification {
+            position: fixed;
+            top: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(30, 41, 59, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 0.5rem;
+            padding: 0.75rem 1rem;
+            color: #ffffff;
+            font-size: 11px;
+            z-index: 1000;
+            max-width: 300px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            animation: slideInDown 0.3s ease-out;
+        }
+        
+        .notification strong {
+            color: #facc15;
+            margin-right: 0.5rem;
+        }
+        
+        .notification.fade-out {
+            animation: slideOutUp 0.3s ease-in forwards;
+        }
+        
+        @keyframes slideInDown {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+        
+        @keyframes slideOutUp {
+            from {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-20px);
+            }
+        }
+
+        /* Toggle switch for screen protection */
+        .screen-protection-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            margin-left: 0.8rem;
+            -webkit-app-region: no-drag;
+            pointer-events: auto !important;
+            z-index: 100;
+            padding: 0.2rem 0.5rem;
+            border-radius: 0.375rem;
+            transition: background-color 0.2s ease;
+        }
+        
+        .screen-protection-toggle:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+        }
+        
+        .screen-protection-toggle span {
+            color: #ffffff;
+            font-size: 9px;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 28px;
+            height: 16px;
+            -webkit-app-region: no-drag;
+            pointer-events: auto !important;
+            cursor: pointer;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(160, 174, 192, 0.3);
+            transition: .3s;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 10px;
+            width: 10px;
+            left: 3px;
+            bottom: 2px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: rgba(52, 211, 153, 0.7);
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(12px);
+        }
+
+    </style>
+</head>
+<body>
+    <div class="overlay-container">
+        <div class="header-bar">
+            <div id="screenshotsContainer" class="screenshots-container">
+                <!-- Screenshots will be added here -->
+            </div>
+            <div class="hotkey-hints-container">
+                <span>Screenshot:<kbd>Ctrl</kbd><kbd>H</kbd></span>
+                <span>Solve:<kbd>Ctrl</kbd><kbd>Enter</kbd></span>
+                <span>Clear:<kbd>Ctrl</kbd><kbd>K</kbd></span>
+                <span id="muteListenHint">Mute:<kbd>Ctrl</kbd><kbd>L</kbd></span>
+                <span>Scroll:<kbd>Shift</kbd><kbd>↑</kbd><kbd>↓</kbd></span>
+                <span>Hide:<kbd>Ctrl</kbd><kbd>B</kbd></span>
+                <span>Quit:<kbd>Ctrl</kbd><kbd>Q</kbd></span>
+            </div>
+            <!-- Toggle switch for screen protection -->
+            <div class="screen-protection-toggle">
+                <span>Protection:</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="screenProtectionToggle" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+
+        <span id="status-dot" class="status-dot-corner bg-gray-500"></span>
+
+        <div class="main-content-split">
+            <div id="transcriptArea" class="transcript-area">
+                <p class="sticky-title">Transcript:</p>
+                <div id="transcriptContent">
+                </div>
+            </div>
+            <div id="suggestionsArea" class="suggestions-area">
+                <p class="sticky-title">AI Suggestions:</p>
+                <div id="suggestionsContent">
+                </div>
+            </div>
+        </div>
+                <div class="status-bar">
+            <div class="status-indicator">
+                <span id="status-text" class="status-text">Initializing</span>
+            </div>
+            <!-- Screenshot processing indicator -->
+            <div id="screenshot-status-indicator" class="status-indicator" style="display: none;">
+                <span id="screenshot-status-dot" class="status-dot" style="background-color: #0088ff;"></span>
+                <span id="screenshot-status-text" class="status-text">Processing Screenshot</span>
+            </div>
+            <div id="footerThumbnailContainer" class="footer-thumbnail-container">
+                <img id="footerThumbnail" class="footer-thumbnail" alt="Screen capture" />
+            </div>
+        </div>
+        
+
+    </div>
+    <script src="overlay-renderer.js"></script>
 </body>
-</html>
+</html> 

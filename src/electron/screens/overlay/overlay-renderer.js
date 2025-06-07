@@ -1,14 +1,16 @@
 /*
  * overlay-renderer.js - Overlay window UI and AI interaction management
  * 
- * AI CALLING CONDITIONS (Aligned with Primary Conditions):
- * 1. Minimum text length: 10+ characters
+ * FULL CONTEXT AI CALLING CONDITIONS:
+ * 1. Minimum text length: 15+ characters (increased from 10)
  * 2. Natural sentence breaks: text ends with ., !, ?
- * 3. Similarity check: Content must be <85% similar to last AI call
- * 4. VAD silence: After 1-second silence with 10+ chars and <85% similarity
+ * 3. Complete questions: coding/interview related patterns
+ * 4. Similarity check: Content must be <85% similar to last AI call
+ * 5. VAD silence: After 3-second silence with 15+ chars, natural breaks, and <85% similarity
+ * 6. Conversation history: Full context from up to 10 conversation turns
  * 
- * Note: Primary AI calling is handled by recording.js service.
- * This file provides additional fallback checks and VAD-based triggers.
+ * Note: All AI processing includes conversation context for comprehensive responses.
+ * The incremental AI system has been removed in favor of complete context processing.
  */
 
 // overlay-renderer.js
@@ -49,20 +51,31 @@ let screenProtectionEnabled = true; // Default state is enabled
 function initScreenProtectionToggle() {
     const toggle = document.getElementById('screenProtectionToggle');
     if (toggle) {
+        // Set initial state to enabled (matches our default)
         toggle.checked = screenProtectionEnabled;
+        
+        // Ensure screen protection is actually enabled on overlay load
+        if (ipcRenderer) {
+            ipcRenderer.send('toggle-screen-protection', screenProtectionEnabled);
+            console.log(`🔒 Screen protection initialized and ${screenProtectionEnabled ? 'enabled' : 'disabled'}`);
+        }
         
         // Add event listener
         toggle.addEventListener('change', function() {
             screenProtectionEnabled = this.checked;
             // Send message to main process to toggle content protection
-            ipcRenderer.send('toggle-screen-protection', screenProtectionEnabled);
+            if (ipcRenderer) {
+                ipcRenderer.send('toggle-screen-protection', screenProtectionEnabled);
+            }
             
             // Show notification
             const status = screenProtectionEnabled ? 'enabled' : 'disabled';
             showNotification('Screen Protection', `Screen protection ${status}`);
             
-            console.log(`Screen protection ${status}`);
+            console.log(`🔒 Screen protection ${status}`);
         });
+    } else {
+        console.warn('⚠️ Screen protection toggle element not found');
     }
 }
 
@@ -154,6 +167,58 @@ style.textContent = `
         font-weight: bold;
         margin-right: 5px;
     }
+    
+    /* Transparent code block styles with glass effect - AGGRESSIVE OVERRIDE */
+    pre, pre code, .hljs, code, 
+    pre[data-language], pre code[data-language], 
+    .hljs-keyword, .hljs-string, .hljs-comment, .hljs-number, .hljs-function, .hljs-variable,
+    .suggestion-content pre, .suggestion-content code, .suggestion-content .hljs,
+    div pre, div code, span code, p code {
+        background: transparent !important; /* Completely transparent */
+        background-color: transparent !important; /* Completely transparent */
+        border: 1px solid rgba(255, 255, 255, 0.1) !important; /* Subtle border only */
+        border-radius: 6px !important;
+    }
+    
+    /* Force remove any solid backgrounds */
+    .hljs, pre, code, pre code {
+        background-image: none !important;
+        background-attachment: unset !important;
+        background-origin: unset !important;
+        background-clip: unset !important;
+        background-repeat: unset !important;
+        background-position: unset !important;
+        background-size: unset !important;
+    }
+    
+    /* Ensure all syntax highlighting elements are transparent */
+    .hljs *, pre *, code * {
+        background-color: transparent !important;
+        background: transparent !important;
+    }
+    
+    /* Ensure code text remains visible with good contrast */
+    pre code, .hljs, code, .hljs * {
+        color: #e2e8f0 !important; /* Light gray text */
+    }
+    
+    /* Inline code specific styling */
+    code:not(pre code), span code, p code {
+        padding: 2px 4px !important;
+        font-size: 0.9em !important;
+        background: transparent !important; /* Completely transparent */
+        background-color: transparent !important; /* Completely transparent */
+        border-radius: 3px !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    }
+    
+    /* Syntax highlighting colors optimized for transparency */
+                    .hljs-keyword, .hljs-built_in { color: #0088ff !important; background: transparent !important; } /* Darker brightest blue */
+                .hljs-string { color: #00ff88 !important; background: transparent !important; } /* Darkest brightest green */
+                .hljs-comment { color: #d1d5db !important; background: transparent !important; } /* Light bright grey for better contrast */
+                .hljs-number { color: #ff6600 !important; background: transparent !important; } /* Bright orange */
+                .hljs-function { color: #0088ff !important; background: transparent !important; } /* Darker brightest blue */
+                .hljs-variable { color: #ffffff !important; background: transparent !important; } /* Pure white */
 `;
 document.head.appendChild(style);
 
@@ -164,6 +229,11 @@ const suggestionsContent = document.getElementById('suggestionsContent');
 const suggestionsArea = document.getElementById('suggestionsArea');
 const statusDot = document.getElementById('status-dot');
 const statusText = document.getElementById('status-text');
+
+// Screenshot processing indicator elements
+const screenshotStatusIndicator = document.getElementById('screenshot-status-indicator');
+const screenshotStatusDot = document.getElementById('screenshot-status-dot');
+const screenshotStatusText = document.getElementById('screenshot-status-text');
 
 const footerThumbnailContainer = document.getElementById('footerThumbnailContainer');
 const footerThumbnail = document.getElementById('footerThumbnail');
@@ -202,16 +272,18 @@ let currentInterimText = ""; // Stores current interim (in-progress) text
 let pauseTimer = null; // Timer to detect 5-second pauses
 const PAUSE_THRESHOLD = 5000; // 5 seconds in milliseconds
 
-// AI suggestion tracking
-let currentSuggestionElement = null; // Current suggestion being updated
-let isNewParagraph = true; // Flag to indicate if we should create a new suggestion
+// AI suggestion tracking - simplified for complete context mode
 let lastAICallText = ""; // Track last text sent to AI to avoid duplicate calls
 let vadSilenceTimer = null; // Timer to track VAD silence for AI calls
-const VAD_SILENCE_THRESHOLD = 1000; // 1 second in milliseconds
+const VAD_SILENCE_THRESHOLD = 3000; // 3 seconds in milliseconds (increased for full context mode)
 
 // Legacy variable - now using activeStreamingSuggestionElement and currentStreamingResponseText
 
 // Overlay is always in click-through mode - scrollbar area remains interactive
+
+// Cleanup configuration - keep only latest items to maintain performance
+const MAX_TRANSCRIPT_LINES = 5;
+const MAX_SUGGESTIONS = 5;
 
 // --- Helper Functions ---
 function determineSpeaker(text) {
@@ -221,6 +293,42 @@ function determineSpeaker(text) {
     if (lowerText.includes('candidate:') || lowerText.includes('answer:')) return 'Candidate';
     return 'Speaker'; // Default if no specific keyword
 }
+
+// Cleanup functions to maintain limits
+function cleanupOldTranscriptLines() {
+    if (!transcriptContent) return;
+    
+    const transcriptLines = transcriptContent.querySelectorAll('.transcript-line-final');
+    if (transcriptLines.length > MAX_TRANSCRIPT_LINES) {
+        const linesToRemove = transcriptLines.length - MAX_TRANSCRIPT_LINES;
+        for (let i = 0; i < linesToRemove; i++) {
+            transcriptLines[i].remove();
+        }
+        console.log(`🧹 Cleaned up ${linesToRemove} old transcript lines, keeping latest ${MAX_TRANSCRIPT_LINES}`);
+    }
+}
+
+function cleanupOldSuggestions() {
+    if (!suggestionsContent) return;
+    
+    const suggestions = suggestionsContent.querySelectorAll('.suggestion-container');
+    if (suggestions.length > MAX_SUGGESTIONS) {
+        const suggestionsToRemove = suggestions.length - MAX_SUGGESTIONS;
+        for (let i = 0; i < suggestionsToRemove; i++) {
+            suggestions[i].remove();
+        }
+        console.log(`🧹 Cleaned up ${suggestionsToRemove} old suggestions, keeping latest ${MAX_SUGGESTIONS}`);
+    }
+}
+
+// Periodic cleanup to ensure limits are maintained
+function performPeriodicCleanup() {
+    cleanupOldTranscriptLines();
+    cleanupOldSuggestions();
+}
+
+// Set up periodic cleanup every minute
+setInterval(performPeriodicCleanup, 60000);
 
 // --- Core Functions ---
 function updateVideoThumbnail(base64ImageData) {
@@ -236,9 +344,35 @@ function updateStatus(status, color) {
     if (statusDot) statusDot.className = `status-dot-corner bg-${color}`;
 }
 
+// Screenshot processing indicator functions
+function showScreenshotProcessing(screenshotCount = 1) {
+    if (screenshotStatusIndicator && screenshotStatusText) {
+        screenshotStatusIndicator.style.display = 'flex';
+        screenshotStatusText.textContent = `Processing ${screenshotCount} Screenshot${screenshotCount > 1 ? 's' : ''}`;
+        console.log(`📸 Screenshot processing indicator shown for ${screenshotCount} screenshot(s)`);
+    }
+}
+
+function hideScreenshotProcessing() {
+    if (screenshotStatusIndicator) {
+        screenshotStatusIndicator.style.display = 'none';
+        console.log('📸 Screenshot processing indicator hidden');
+    }
+}
+
+function updateScreenshotProcessingStatus(message) {
+    if (screenshotStatusText) {
+        screenshotStatusText.textContent = message;
+        console.log(`📸 Screenshot processing status updated: ${message}`);
+    }
+}
+
 function displayTranscriptSegment(data) {
     const segmentText = typeof data === 'string' ? data : data.text;
     const isFinal = typeof data === 'object' && data.is_final === true;
+    
+    // DEBUG: Log all incoming transcription data
+    console.log(`🎙️ STT: "${segmentText}" | isFinal: ${isFinal}`);
     
     const currentTime = Date.now();
 
@@ -250,75 +384,80 @@ function displayTranscriptSegment(data) {
 
     const cleanSegment = segmentText ? segmentText.replace(/^(interviewer:|candidate:|question:|answer:)\s*/i, '').trim() : "";
 
-    if (!cleanSegment && isFinal) { // Handle empty final segments (e.g. end of utterance)
-        // Clear any existing pause timer
-        if (pauseTimer) {
-            clearTimeout(pauseTimer);
-            pauseTimer = null;
-        }
-        
-        // Set timer to finalize current line after 5 seconds of silence
-        if (currentTranscriptLineElement && transcriptBuffer) {
-            pauseTimer = setTimeout(() => {
-            finalizeCurrentLine();
-                pauseTimer = null;
-            }, PAUSE_THRESHOLD);
-        }
-        return;
-    }
-    if (!cleanSegment && !isFinal) { // Ignore empty interim results
+    if (!cleanSegment) {
+        console.log(`🎙️ STT: Empty segment - ignoring`);
         return;
     }
 
     // Clear any existing pause timer since we received new content
     if (pauseTimer) {
-        clearTimeout(pauseTimer);
+        clearManagedTimeout(pauseTimer);
         pauseTimer = null;
     }
 
-    // Check if we need to create a new line (first transcription or after a pause)
+    // Create new line if needed
     if (!currentTranscriptLineElement) {
+        console.log(`🎙️ STT: Creating new transcript line`);
         createNewLine();
     }
     
-    // Handle interim vs final results differently
-    if (!isFinal) {
-        // For interim results: replace the current in-progress text
-        currentInterimText = cleanSegment;
-        if (currentTranscriptLineElement) {
-            // Display accumulated final text + current interim text
-            const displayText = transcriptBuffer + (transcriptBuffer.length > 0 && currentInterimText.length > 0 ? ' ' : '') + currentInterimText;
-            currentTranscriptLineElement.textContent = displayText;
-            currentTranscriptLineElement.className = 'transcript-line transcript-line-interim';
+    if (isFinal) {
+        // FINAL RESULT: Append to existing accumulated content
+        console.log(`🎙️ STT: Processing FINAL result - "${cleanSegment}"`);
+        
+        // Append final text to existing buffer (no replacement)
+        if (transcriptBuffer.trim()) {
+            // Check if the new segment is not already contained in buffer
+            if (!transcriptBuffer.includes(cleanSegment)) {
+                transcriptBuffer += " " + cleanSegment;
+                console.log(`📝 Appended new final segment: "${cleanSegment}"`);
+            } else {
+                console.log(`📝 Final segment already in buffer, skipping: "${cleanSegment}"`);
+            }
+        } else {
+            // First final segment for this line
+            transcriptBuffer = cleanSegment;
+            console.log(`📝 First final segment: "${cleanSegment}"`);
         }
-    } else {
-        // For final results: accumulate into the paragraph buffer
-        transcriptBuffer += (transcriptBuffer.length > 0 ? ' ' : '') + cleanSegment;
-        currentInterimText = ""; // Clear interim text since it's now final
-    
-    if (currentTranscriptLineElement) {
-        currentTranscriptLineElement.textContent = transcriptBuffer;
+        
+        // Clear interim text since we have final result
+        currentInterimText = "";
+        
+        if (currentTranscriptLineElement) {
+            currentTranscriptLineElement.textContent = transcriptBuffer;
             currentTranscriptLineElement.className = 'transcript-line transcript-line-final';
         }
+        
+        console.log(`✅ Final transcript accumulated: "${transcriptBuffer}"`);
         
         // Smart AI calling: Only call AI when we have meaningful sentence completion
         checkAndCallAI();
         
         // Set timer to finalize and create new line after 5 seconds of no new input
-        pauseTimer = setTimeout(() => {
-        finalizeCurrentLine();
+        pauseTimer = managedSetTimeout(() => {
+            finalizeCurrentLine();
             pauseTimer = null;
         }, PAUSE_THRESHOLD);
+    } else {
+        // INTERIM RESULT: Show current recognition progress 
+        console.log(`🎙️ STT: Processing INTERIM result - "${cleanSegment}"`);
+        
+        // For interim results, show the current progress alongside accumulated final text
+        currentInterimText = cleanSegment;
+        
+        if (currentTranscriptLineElement) {
+            // Combine accumulated final text with current interim text
+            const displayText = transcriptBuffer ? 
+                (transcriptBuffer + " " + currentInterimText) : 
+                currentInterimText;
+            
+            currentTranscriptLineElement.textContent = displayText;
+            currentTranscriptLineElement.className = 'transcript-line transcript-line-interim';
+        }
     }
 
     // Update timestamp
     lastTimestamp = currentTime;
-
-    if (transcriptArea) {
-         setTimeout(() => { // Ensure DOM update before scrolling
-            transcriptArea.scrollTop = transcriptArea.scrollHeight;
-        }, 0);
-    }
 }
 
 function createNewLine() {
@@ -349,9 +488,11 @@ function finalizeCurrentLine() {
     currentTranscriptLineElement.classList.add('transcript-line-final');
     currentTranscriptLineElement.textContent = transcriptBuffer; // Ensure final text is set
     
-    // Mark that the next AI suggestion should be a new one (new paragraph)
-    isNewParagraph = true;
-    currentSuggestionElement = null;
+    // Clean up old transcript lines to maintain limit
+    cleanupOldTranscriptLines();
+    
+    // Smart AI calling: Only call AI when we have meaningful sentence completion
+    checkAndCallAI();
     
     currentTranscriptLineElement = null; // Ready for a new line
     transcriptBuffer = "";
@@ -361,47 +502,46 @@ function finalizeCurrentLine() {
 function checkAndCallAI() {
     const currentText = transcriptBuffer.trim();
     
-    // PRIMARY CONDITION 1: Minimum text length (10+ characters)
-    if (!currentText || currentText.length < 10) {
-        console.log(`❌ Skipping AI call - insufficient length (${currentText.length} < 10 chars)`);
+    // SIMPLIFIED CONDITIONS (NO INCREMENTAL - FULL CONTEXT MODE):
+    // 1. Minimum text length: 5+ characters (temporarily lowered for testing)
+    // 2. Natural sentence breaks: text ends with ., !, ?
+    // 3. Complete questions: coding/interview related patterns
+    // 4. Similarity check: Content must be <85% similar to last AI call
+    
+    if (!currentText || currentText.length < 5) {
+        console.log(`❌ Skipping AI call - insufficient length (${currentText.length} < 5 chars)`);
         return;
     }
     
-    // PRIMARY CONDITION 3: Similarity check (Content must be <85% similar to last AI call)
-    if (currentText === lastAICallText) {
-        console.log('🤖 Skipping AI call - identical text as last call');
-        return;
-    }
+    // REMOVED: identical content check to allow repeated questions
+    // Users should be able to ask the same question multiple times
     
-    // PRIMARY CONDITION 2: Natural sentence breaks (when text ends with ., !, ?)
+    // Check for natural breaks and complete questions
     const hasNaturalBreak = /[.!?](?:\s|$)/.test(currentText);
-    
-    // Check if this is significantly different content
-    const contentSimilarity = calculateContentSimilarity(currentText, lastAICallText);
-    const isUnderSimilarityThreshold = contentSimilarity < 0.85; // Less than 85% similar
-    
-    console.log(`📊 Overlay AI Call Conditions Check:`);
-    console.log(`   Text length: ${currentText.length} (min 10: ${currentText.length >= 10})`);
-    console.log(`   Natural break: ${hasNaturalBreak}`);
-    console.log(`   Similarity: ${(contentSimilarity * 100).toFixed(1)}% (threshold: <85%: ${isUnderSimilarityThreshold})`);
-    
-    // Detect complete questions even without punctuation (fallback condition)
     const looksLikeCompleteQuestion = /\b(write|create|make|build|show|generate|give|tell|explain|how|what|when|where|why|code|program|function|algorithm|script)\b.*\b(code|function|program|script|algorithm|fibonacci|fibunachi|sequence|series|sort|search|loop|array|list|string|number|calculate|find|get|return)\b/i.test(currentText);
     
-    // Check if we should call AI based on new primary conditions
-    const shouldCallAI = hasNaturalBreak && isUnderSimilarityThreshold;
-    const shouldCallAIFallback = looksLikeCompleteQuestion && isUnderSimilarityThreshold;
+    console.log(`📊 Overlay AI Call Conditions Check (Full Context Mode):`);
+    console.log(`   Text length: ${currentText.length} (min 5: ${currentText.length >= 5})`);
+    console.log(`   Natural break: ${hasNaturalBreak}`);
+    console.log(`   Complete question: ${looksLikeCompleteQuestion}`);
+    
+    // Trigger AI on natural breaks or complete questions (similarity check removed)
+    const shouldCallAI = hasNaturalBreak;
+    const shouldCallAIFallback = looksLikeCompleteQuestion;
     
     if (shouldCallAI) {
-        console.log('✅ Primary conditions met - natural break with unique content');
+        console.log('✅ Primary conditions met - natural break detected (full context)');
         lastAICallText = currentText;
-        console.log('🤖 Note: Smart AI calling now handled automatically by recording service');
+        console.log('🤖 Note: AI processing handled by recording service with full conversation context');
     } else if (shouldCallAIFallback) {
-        console.log('✅ Fallback condition met - complete question detected with unique content');
+        console.log('✅ Fallback condition met - complete question detected (full context)');
         lastAICallText = currentText;
-        console.log('🤖 Note: Smart AI calling now handled automatically by recording service');
+        console.log('🤖 Note: AI processing handled by recording service with full conversation context');
     } else {
-        console.log(`❌ Conditions not met - ${!hasNaturalBreak ? 'no natural break' : ''} ${!isUnderSimilarityThreshold ? 'content too similar' : ''}`);
+        console.log(`❌ Conditions not met for full context AI call:`);
+        if (!hasNaturalBreak && !looksLikeCompleteQuestion) {
+            console.log(`   - No natural break or complete question pattern`);
+        }
     }
 }
 
@@ -434,32 +574,253 @@ function calculateContentSimilarity(text1, text2) {
 
 // Create a new suggestion element without appending to DOM yet
 function createNewSuggestionElement(title, content) {
-    const suggestionElement = document.createElement('div');
-    suggestionElement.className = 'suggestion-item';
+    console.log('🎯 DEBUGGING: createNewSuggestionElement called');
+    console.log(`🎯 DEBUGGING: title="${title}", content="${content}"`);
     
-    // Add response ID as data attribute
-    if (currentResponseId) {
-        suggestionElement.dataset.responseId = currentResponseId;
+    try {
+        const suggestionElement = document.createElement('div');
+        suggestionElement.className = 'suggestion-item';
+        console.log('🎯 DEBUGGING: Main element created');
+        
+        // Add response ID as data attribute
+        if (currentResponseId) {
+            suggestionElement.dataset.responseId = currentResponseId;
+            console.log('🎯 DEBUGGING: Response ID added:', currentResponseId);
+        }
+        
+        const titleElement = document.createElement('div');
+        titleElement.className = 'suggestion-title';
+        titleElement.textContent = title;
+        console.log('🎯 DEBUGGING: Title element created');
+        
+        const contentElement = document.createElement('div');
+        contentElement.className = 'suggestion-content';
+        console.log('🎯 DEBUGGING: Content element created, about to set content');
+        
+        // Use unified formatter instead of plain text
+        setStreamingContentSmart(contentElement, content);
+        console.log('🎯 DEBUGGING: Content set using setStreamingContentSmart');
+        
+        suggestionElement.appendChild(titleElement);
+        suggestionElement.appendChild(contentElement);
+        console.log('🎯 DEBUGGING: Elements appended, returning suggestion element');
+        
+        return suggestionElement;
+    } catch (error) {
+        console.error('❌ DEBUGGING: Error in createNewSuggestionElement:', error);
+        console.error(error.stack);
+        throw error;
     }
-    
-    const titleElement = document.createElement('div');
-    titleElement.className = 'suggestion-title';
-    titleElement.textContent = title;
-    
-    const contentElement = document.createElement('div');
-    contentElement.className = 'suggestion-content';
-    contentElement.textContent = content;
-    
-    suggestionElement.appendChild(titleElement);
-    suggestionElement.appendChild(contentElement);
-    
-    return suggestionElement;
 }
 
-// Update suggestion content with full markdown text
-function updateSuggestionContent(suggestionElement, markdownContent) {
-    console.log('🔄 DEBUG: updateSuggestionContent called');
+// Apply transparent styles to code blocks (extracted from setContentHTML)
+function applyTransparentStylesToCodeBlock(block, index) {
+    console.log(`🎨 Applying transparent styles to code block ${index}`);
+    
+    // Apply transparent styles to the code block itself with proper wrapping
+    block.style.cssText = `
+        background: transparent !important;
+        background-color: transparent !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        border-radius: 6px !important;
+        color: #ffffff !important;
+        white-space: pre-wrap !important;
+        word-wrap: break-word !important;
+        word-break: break-all !important;
+        overflow-wrap: break-word !important;
+        max-width: 100% !important;
+        overflow-x: auto !important;
+    `;
+    
+    // Apply transparent styles to the parent pre element with proper wrapping
+    const pre = block.parentElement;
+    if (pre && pre.tagName === 'PRE') {
+        pre.style.cssText = `
+            background: transparent !important;
+            background-color: transparent !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            border-radius: 6px !important;
+            white-space: pre-wrap !important;
+            word-wrap: break-word !important;
+            overflow-wrap: break-word !important;
+            max-width: 100% !important;
+            overflow-x: auto !important;
+        `;
+    }
+    
+    // Force transparent background on all child elements
+    const allChildren = block.querySelectorAll('*');
+    allChildren.forEach(child => {
+        child.style.backgroundColor = 'transparent';
+        child.style.background = 'transparent';
+    });
+    
+    console.log(`✅ Transparent styles applied to code block ${index}`);
+}
+
+// UNIFIED STREAMING FORMATTER: Single source of truth for all real-time formatting
+function setStreamingContentSmart(contentElem, text) {
+    console.log('🎯 DEBUGGING: setStreamingContentSmart called');
+    console.log(`🎯 DEBUGGING: contentElem exists: ${!!contentElem}, text: "${text}"`);
+    
+    if (!contentElem || !text) {
+        console.log('🎯 DEBUGGING: Missing contentElem or text, setting empty');
+        if (contentElem) contentElem.textContent = '';
+        return;
+    }
+    
+    console.log('🎨 UNIFIED: Processing streaming content with real-time formatting');
+    console.log(`  ⚠️ WARNING: Full re-render! Content length: ${text.length}, Has code blocks: ${text.includes('```')}`);
+    console.log(`  Content preview (first 100): "${text.substring(0, 100)}"`);
+    console.log(`  Content preview (last 100): "${text.length > 100 ? text.substring(text.length - 100) : 'N/A - content too short'}"`);
+    
+    // STEP 1: Try full markdown parsing for complete code blocks
+    if (text.includes('```') && typeof marked !== 'undefined' && marked.parse) {
+        try {
+            const htmlContent = marked.parse(text);
+            contentElem.innerHTML = htmlContent;
+            
+            // Apply syntax highlighting and styling to code blocks
+            const codeBlocks = contentElem.querySelectorAll('pre code');
+            codeBlocks.forEach((block, index) => {
+                if (typeof hljs !== 'undefined') {
+                    hljs.highlightElement(block);
+                }
+                applyTransparentStylesToCodeBlock(block, index);
+            });
+            
+            console.log('✅ UNIFIED: Full markdown parsing with syntax highlighting applied');
+            return;
+        } catch (error) {
+            console.warn('⚠️ UNIFIED: Markdown parsing failed, falling back to smart formatting:', error);
+        }
+    }
+    
+    // STEP 2: Smart real-time formatting for partial content
+    let formattedContent = text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
+        .replace(/\*(.*?)\*/g, '<em>$1</em>') // Italic
+        .replace(/`([^`]+)`/g, '<code class="inline-code" style="background: rgba(0,0,0,0.1); padding: 2px 4px; border-radius: 3px; color: #e2e8f0;">$1</code>') // Inline code
+        .replace(/\n/g, '<br>'); // Line breaks
+    
+    // STEP 3: Handle partial code blocks with real-time highlighting
+    formattedContent = formattedContent.replace(
+        /```(\w+)?\n?([\s\S]*?)```?/g, 
+        (match, lang, code) => {
+            if (code && code.trim().length > 3) {
+                let highlightedCode = code;
+                
+                // Apply syntax highlighting if language specified and hljs available
+                if (typeof hljs !== 'undefined' && lang) {
+                    try {
+                        const result = hljs.highlight(code, { language: lang, ignoreIllegals: true });
+                        highlightedCode = result.value;
+                    } catch (e) {
+                        highlightedCode = code; // Fallback to plain code
+                    }
+                }
+                
+                return `<pre class="streaming-code" data-language="${lang || 'text'}" style="background: transparent !important; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 12px; margin: 8px 0;"><code class="hljs language-${lang || 'text'}" style="background: transparent !important; color: #e2e8f0 !important; white-space: pre-wrap; word-wrap: break-word;">${highlightedCode}</code></pre>`;
+            } else {
+                // Very partial code block - show as inline
+                return `<code class="partial-code" style="background: rgba(0,0,0,0.2); padding: 2px 4px; border-radius: 3px; color: #e2e8f0;">${code}</code>`;
+            }
+        }
+    );
+    
+    contentElem.innerHTML = formattedContent;
+    console.log('✅ UNIFIED: Smart real-time formatting applied');
+}
+
+// FAST INCREMENTAL APPEND: Only append new chunk without re-rendering everything
+function appendOnlyNewChunk(suggestionElement, newChunk) {
+    console.log('🎯 DEBUGGING: appendOnlyNewChunk called');
+    console.log(`🎯 DEBUGGING: suggestionElement exists: ${!!suggestionElement}, newChunk: "${newChunk}"`);
+    
+    if (!suggestionElement || !newChunk) {
+        console.log('🎯 DEBUGGING: Missing suggestionElement or newChunk, returning');
+        return;
+    }
+    
+    const startTime = performance.now();
+    const contentDiv = suggestionElement.querySelector('.suggestion-content');
+    
+    console.log('🎯 DEBUGGING: contentDiv found:', !!contentDiv);
+    if (!contentDiv) {
+        console.log('🎯 DEBUGGING: No contentDiv found, returning');
+        return;
+    }
+    
+    console.log('⚡ INCREMENTAL: Appending only new chunk');
+    console.log(`  Chunk: "${newChunk}"`);
+    
+    try {
+        const formatStartTime = performance.now();
+        // Simplified formatting - just escape HTML and convert newlines
+        let formattedChunk = newChunk
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\n/g, '<br>');
+        
+        const formatEndTime = performance.now();
+        console.log(`⏱️ FORMAT TIME: ${(formatEndTime - formatStartTime).toFixed(3)}ms`);
+        
+        // Directly append the formatted chunk to existing innerHTML
+        const domStartTime = performance.now();
+        console.log(`🎯 DEBUGGING: Current contentDiv.innerHTML length: ${contentDiv.innerHTML.length}`);
+        contentDiv.innerHTML += formattedChunk;
+        console.log(`🎯 DEBUGGING: New contentDiv.innerHTML length: ${contentDiv.innerHTML.length}`);
+        const domEndTime = performance.now();
+        
+        console.log(`⏱️ DOM APPEND TIME: ${(domEndTime - domStartTime).toFixed(3)}ms`);
+        console.log(`⏱️ TOTAL INCREMENTAL TIME: ${(domEndTime - startTime).toFixed(3)}ms`);
+        console.log('⚡ INCREMENTAL: Chunk appended directly to DOM');
+    } catch (error) {
+        console.error('❌ DEBUGGING: Error in appendOnlyNewChunk:', error);
+        console.error(error.stack);
+    }
+    
+    // Auto-scroll to bottom if user hasn't scrolled up
+    const suggestionsArea = document.getElementById('suggestionsArea');
+    if (suggestionsArea) {
+        const isNearBottom = suggestionsArea.scrollTop + suggestionsArea.clientHeight >= suggestionsArea.scrollHeight - 50;
+        if (isNearBottom) {
+            requestAnimationFrame(() => {
+                suggestionsArea.scrollTop = suggestionsArea.scrollHeight;
+            });
+        }
+    }
+}
+
+// LEGACY: Keep for compatibility but mark as inefficient
+function appendToSuggestionContentFormatted(suggestionElement, fullAccumulatedText) {
+    console.warn('⚠️ LEGACY: Using slow full re-render instead of incremental append');
+    if (!suggestionElement || !fullAccumulatedText) return;
+    
+    const contentDiv = suggestionElement.querySelector('.suggestion-content');
+    if (!contentDiv) return;
+    
+    // Use smart fast rendering with code detection for real-time formatting
+    setStreamingContentSmart(contentDiv, fullAccumulatedText);
+    
+    // Auto-scroll to bottom if user hasn't scrolled up
+    const suggestionsArea = document.getElementById('suggestionsArea');
+    if (suggestionsArea) {
+        const isNearBottom = suggestionsArea.scrollTop + suggestionsArea.clientHeight >= suggestionsArea.scrollHeight - 50;
+        if (isNearBottom) {
+            requestAnimationFrame(() => {
+                suggestionsArea.scrollTop = suggestionsArea.scrollHeight;
+            });
+        }
+    }
+}
+
+// UNIFIED CONTENT UPDATER: Single source of truth for all suggestion content updates
+function updateSuggestionContent(suggestionElement, markdownContent, isStreamingComplete = false) {
+    console.log('🎨 UNIFIED: updateSuggestionContent called');
     console.log('  Content length:', markdownContent ? markdownContent.length : 'null');
+    console.log('  Streaming complete:', isStreamingComplete);
 
     const contentDiv = suggestionElement.querySelector('.suggestion-content');
     if (!contentDiv) {
@@ -467,8 +828,10 @@ function updateSuggestionContent(suggestionElement, markdownContent) {
         return;
     }
 
-    // Use existing setContentHTML function to parse and highlight
-    setContentHTML(contentDiv, markdownContent);
+    // ALWAYS use the unified streaming formatter for consistent real-time formatting
+    // Whether it's the first chunk, streaming chunk, or final chunk - unified approach
+    console.log('🎨 UNIFIED: Using single formatting approach for all content');
+    setStreamingContentSmart(contentDiv, markdownContent);
 
     // Auto-scroll to bottom if user hasn't scrolled up
     const suggestionsArea = document.getElementById('suggestionsArea');
@@ -477,11 +840,20 @@ function updateSuggestionContent(suggestionElement, markdownContent) {
         const isNearBottom = suggestionsArea.scrollTop + suggestionsArea.clientHeight >= suggestionsArea.scrollHeight - 50;
         
         if (isNearBottom) {
-            setTimeout(() => {
+            // Use requestAnimationFrame for smoother scrolling during streaming
+            requestAnimationFrame(() => {
                 suggestionsArea.scrollTop = suggestionsArea.scrollHeight;
-            }, 0);
+            });
         }
     }
+}
+
+// REMOVED: Duplicate function - consolidated into unified formatter above
+
+// Legacy function kept for compatibility
+function setStreamingContentFast(contentDiv, content) {
+    // Redirect to the new smart function
+    setStreamingContentSmart(contentDiv, content);
 }
 
 function addOrUpdateSuggestion(title, content) {
@@ -497,20 +869,12 @@ function addOrUpdateSuggestion(title, content) {
     console.log('  Title:', title);
     console.log('  Content length:', content ? content.length : 'null');
     console.log('  Content preview:', content ? content.substring(0, 200) + '...' : 'null');
-    console.log('  isNewParagraph:', isNewParagraph);
-    console.log('  currentSuggestionElement exists:', !!currentSuggestionElement);
 
-    // Check if we should update existing suggestion or create new one
-    if (!isNewParagraph && currentSuggestionElement) {
-        // Update existing suggestion
-        console.log('🔄 Updating existing AI suggestion');
-        updateExistingSuggestion(currentSuggestionElement, title, content);
-    } else {
-        // Create new suggestion
-        console.log('✨ Creating new AI suggestion');
-        createNewSuggestion(title, content);
-        isNewParagraph = false; // Reset flag after creating new suggestion
-    }
+    // COMPLETE CONTEXT MODE: Always create new suggestions
+    // Since each AI call is now for a different complete sentence/thought,
+    // we should always create a new suggestion instead of updating existing ones
+    console.log('✨ Creating new AI suggestion (Complete Context Mode)');
+    createNewSuggestion(title, content);
 }
 
 function createNewSuggestion(title, content) {
@@ -533,15 +897,17 @@ function createNewSuggestion(title, content) {
     const contentElem = document.createElement('div');
     contentElem.className = 'suggestion-content';
     
-    console.log('🎨 DEBUG: About to set content HTML');
-    setContentHTML(contentElem, content);
-    console.log('🎨 DEBUG: Content HTML set, element innerHTML length:', contentElem.innerHTML.length);
+    console.log('🎨 DEBUG: About to set content using unified formatter');
+    setStreamingContentSmart(contentElem, content);
+    console.log('🎨 DEBUG: Content set using unified formatter, element innerHTML length:', contentElem.innerHTML.length);
     
     container.appendChild(contentElem);
 
     if (suggestionsContent) {
         suggestionsContent.appendChild(container);
-        currentSuggestionElement = container; // Track this as the current suggestion
+        
+        // Clean up old suggestions to maintain limit
+        cleanupOldSuggestions();
         
         console.log('✅ DEBUG: Suggestion container added to DOM');
         console.log('  suggestionsContent children count:', suggestionsContent.children.length);
@@ -572,10 +938,10 @@ function updateExistingSuggestion(container, title, content) {
         }
     }
 
-    // Update content
+    // Update content using unified formatter
     const contentElem = container.querySelector('.suggestion-content') || container.querySelector('div:last-child');
     if (contentElem) {
-        setContentHTML(contentElem, content);
+        setStreamingContentSmart(contentElem, content);
     }
 
     if (suggestionsArea) {
@@ -600,65 +966,62 @@ function setContentHTML(contentElem, content) {
             console.log('  Parsed content length:', parsedContent.length);
             console.log('  Parsed content preview:', parsedContent.substring(0, 300) + '...');
             
-            // Post-process to ensure all code blocks have proper highlighting
+            // Apply styling to all code blocks (highlighting was done by marked)
             const codeBlocks = contentElem.querySelectorAll('pre code');
             console.log('  Found code blocks:', codeBlocks.length);
             
             codeBlocks.forEach((block, index) => {
-                console.log(`🔍 Processing code block ${index}:`, block.textContent.substring(0, 50) + '...');
+                console.log(`🎨 Styling code block ${index}:`, block.textContent.substring(0, 50) + '...');
                 
-                // Remove any existing highlighting classes to start fresh
-                block.className = block.className.replace(/\bhljs\S*/g, '').trim();
-                
-                // Get the language from data attribute or class
+                // Get the language from data attribute or class (already set by marked)
                 let lang = block.getAttribute('data-language') || 
                           block.className.match(/language-(\w+)/)?.[1] || 
-                          block.parentElement?.getAttribute('data-language');
+                          block.parentElement?.getAttribute('data-language') || 'text';
                 
-                console.log(`  Detected language: ${lang || 'auto-detect'}`);
+                console.log(`  Language: ${lang}`);
                 
-                // Apply syntax highlighting with hljs
-                if (typeof hljs !== 'undefined') {
-                    try {
-                        let highlightResult;
-                        
-                        if (lang && hljs.getLanguage(lang)) {
-                            // Use specified language
-                            highlightResult = hljs.highlight(block.textContent, { language: lang, ignoreIllegals: true });
-                            console.log(`  ✅ Highlighted with language: ${lang}`);
-                        } else {
-                            // Auto-detect language
-                            highlightResult = hljs.highlightAuto(block.textContent, ['javascript', 'python', 'java', 'cpp', 'csharp', 'ruby', 'go', 'sql', 'html', 'css', 'json', 'typescript']);
-                            lang = highlightResult.language || 'text';
-                            console.log(`  🔍 Auto-detected language: ${lang} (confidence: ${highlightResult.relevance})`);
-                        }
-                        
-                        // Apply the highlighted HTML
-                        block.innerHTML = highlightResult.value;
-                        
-                        // Add proper classes
-                        block.className = `hljs language-${lang}`;
-                        block.setAttribute('data-language', lang);
+                // ✨ FORCE TRANSPARENT BACKGROUND - Apply directly after highlighting
+                console.log(`  🎨 Applying transparent styles to code block ${index}`);
                 
-                // Add language label to parent pre element
+                // Apply transparent styles to the code block itself with proper wrapping
+                block.style.cssText = `
+                    background: transparent !important;
+                    background-color: transparent !important;
+                    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+                    border-radius: 6px !important;
+                    color: #ffffff !important;
+                    white-space: pre-wrap !important;
+                    word-wrap: break-word !important;
+                    word-break: break-all !important;
+                    overflow-wrap: break-word !important;
+                    max-width: 100% !important;
+                    overflow-x: auto !important;
+                `;
+                
+                // Apply transparent styles to the parent pre element with proper wrapping
                 const pre = block.parentElement;
-                        if (pre && pre.tagName === 'PRE') {
-                    pre.setAttribute('data-language', lang);
+                if (pre && pre.tagName === 'PRE') {
+                    pre.style.cssText = `
+                        background: transparent !important;
+                        background-color: transparent !important;
+                        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+                        border-radius: 6px !important;
+                        white-space: pre-wrap !important;
+                        word-wrap: break-word !important;
+                        overflow-wrap: break-word !important;
+                        max-width: 100% !important;
+                        overflow-x: auto !important;
+                    `;
                 }
                 
-                        console.log(`  ✅ Successfully highlighted code block ${index} with ${lang}`);
-                        
-                    } catch (error) {
-                        console.error(`  ❌ Error highlighting code block ${index}:`, error);
-                        // Fallback: just add basic classes
-                        block.className = 'hljs';
-                        block.setAttribute('data-language', lang || 'text');
-                    }
-                } else {
-                    console.warn(`  ⚠️ hljs not available for code block ${index}`);
-                    block.className = 'hljs';
-                    block.setAttribute('data-language', lang || 'text');
-                }
+                // Force transparent background on all child elements
+                const allChildren = block.querySelectorAll('*');
+                allChildren.forEach(child => {
+                    child.style.backgroundColor = 'transparent';
+                    child.style.background = 'transparent';
+                });
+                
+                console.log(`  ✅ Transparent styles applied to code block ${index}`);
             });
             
         } catch (e) {
@@ -726,6 +1089,7 @@ function addScreenshotSolution(title, content) {
 
 // Add these variables at the top of the file with other global variables
 let currentResponseId = null;
+let winningResponseId = null; // Track which response won to prevent overwrites
 let currentResponseElement = null;
 
 // Update clearTranscriptAndSuggestions function to reset response tracking
@@ -758,11 +1122,10 @@ function clearTranscriptAndSuggestions() {
     // Reset response tracking
     currentResponseId = null;
     currentResponseElement = null;
+    winningResponseId = null; // Reset winner tracking for new conversation
     
     // Reset cached suggestion content
     lastAICallText = "";
-    isNewParagraph = true;
-    currentSuggestionElement = null;
     
     // Clear any existing pause timer
     if (pauseTimer) {
@@ -777,17 +1140,37 @@ function clearTranscriptAndSuggestions() {
     }
     
     // Update display status
-    updateStatus('Cleared', 'green-500');
-    setTimeout(() => {
-        updateStatus('Ready', 'green-500');
+            updateStatus('Cleared', '#00ff88');
+        setTimeout(() => {
+            updateStatus('Ready', '#00ff88');
     }, 1500);
 }
 
 function toggleMute() {
-    isMuted = !isMuted;
-    updateStatus(isMuted ? 'Muted' : (isRecording ? 'Recording' : 'Standby'), isMuted ? 'red-500' : (isRecording ? 'green-500' : 'yellow-500'));
-    const muteListenHint = document.getElementById('muteListenHint');
-    if (muteListenHint) muteListenHint.innerHTML = `${isMuted ? 'Unmute' : 'Mute'}:<kbd>⌘</kbd><kbd>L</kbd>`;
+    // Toggle mute at the audio processing level (not just UI)
+    ipcRenderer.invoke('toggle-audio-mute').then(result => {
+        if (result.success) {
+            isMuted = result.muted;
+            updateStatus(isMuted ? 'Muted' : (isRecording ? 'Recording' : 'Standby'), isMuted ? '#ff0000' : (isRecording ? '#00ff88' : '#ffff00'));
+            
+            const muteListenHint = document.getElementById('muteListenHint');
+            if (muteListenHint) muteListenHint.innerHTML = `${isMuted ? 'Unmute' : 'Mute'}:<kbd>⌘</kbd><kbd>L</kbd>`;
+            
+            // Show notification about the change
+            showNotification(
+                isMuted ? "Audio Muted" : "Audio Unmuted", 
+                isMuted ? "Audio processing paused - no STT/AI calls" : "Audio processing resumed"
+            );
+            
+            console.log(`🔇 Audio processing ${isMuted ? 'MUTED' : 'UNMUTED'} at recording service level`);
+        } else {
+            console.error('Failed to toggle audio mute:', result.error);
+            showNotification("Mute Error", "Failed to toggle audio mute");
+        }
+    }).catch(error => {
+        console.error('Error calling toggle-audio-mute:', error);
+        showNotification("Mute Error", "Failed to toggle audio mute");
+    });
 }
 
 // Scrollbar drag handling for click-through mode
@@ -860,6 +1243,12 @@ function setupScrollbarDragHandling(element) {
                 ipcRenderer.send('set-mouse-events', true);
             }
         }
+    });
+    
+    // Enable wheel scrolling for the element
+    element.addEventListener('wheel', (e) => {
+        e.stopPropagation();
+        // Allow default wheel behavior for scrolling
     });
 }
 
@@ -1109,6 +1498,10 @@ document.addEventListener('keydown', (event) => {
                 // Cmd/Ctrl + Enter triggers screenshot solution
                 if (screenshotImages.length > 0) {
                     const screenshotCount = screenshotImages.length;
+                    
+                    // Show processing indicator
+                    showScreenshotProcessing(screenshotCount);
+                    
                     ipcRenderer.send('generate-screenshot-solution', { screenshots: screenshotImages, jobRole, keySkills });
                     showNotification("AI Processing", `Analyzing ${screenshotCount} screenshot(s)... Screenshots cleared for fresh captures.`);
                     // Clear screenshots after sending for processing
@@ -1128,6 +1521,12 @@ document.addEventListener('keydown', (event) => {
 });
 
 ipcRenderer.on('transcription-update', (event, data) => {
+    console.log('🎯 DEBUG: transcription-update event received!');
+    console.log('  Raw data:', JSON.stringify(data, null, 2));
+    console.log('  Data type:', typeof data);
+    console.log('  Data.text:', data ? data.text : 'undefined');
+    console.log('  Data.is_final:', data ? data.is_final : 'undefined');
+    
     if (isResettingSTT) {
         console.log("STT is resetting, discarding transcript fragment.");
         return; 
@@ -1138,21 +1537,33 @@ ipcRenderer.on('transcription-update', (event, data) => {
 });
 
 ipcRenderer.on('suggestion-update', (event, data) => {
-    // Record timing for when suggestion is displayed
-    const suggestionDisplayTime = Date.now();
+    // High-precision timing measurement
+    const ipcReceiveTime = performance.now();
+    const ipcReceiveTimeMs = Date.now();
     
     console.log('🎯 DEBUG: suggestion-update event received in overlay renderer!');
+    console.log(`⏱️ IPC RECEIVE TIME: ${ipcReceiveTime.toFixed(3)}ms (high-precision)`);
+    console.log(`⏱️ IPC RECEIVE TIMESTAMP: ${new Date(ipcReceiveTimeMs).toISOString()}`);
     console.log('  Data:', JSON.stringify(data, null, 2));
     
     if (data.isStreaming) {
         if (data.isFirstChunk) {
+            // Reset winner tracking for new question and declare this response as the winner
+            // This ensures each new question starts fresh without interference from previous winners
+            if (data.responseId) {
+                winningResponseId = data.responseId;
+                console.log(`🏆 New question detected - Response ${data.responseId} is now the winner!`);
+                console.log(`🔄 Previous winner tracking reset for fresh start`);
+            }
+            
             // Record timing for first chunk display
-            console.log(`[TIMING] 🎨 FIRST CHUNK RENDERED ON SCREEN at: ${new Date(suggestionDisplayTime).toISOString()}`);
+            console.log(`[TIMING] 🎨 FIRST CHUNK RENDERED ON SCREEN at: ${new Date(ipcReceiveTimeMs).toISOString()}`);
             console.log(`[TIMING] 🎨 First chunk content length: ${data.content ? data.content.length : 0} chars`);
             console.log(`[TIMING] 🎨 First chunk content: "${data.content ? data.content.substring(0, 50) : ''}${data.content && data.content.length > 50 ? '...' : ''}"`);
             
             // Start of a new streaming response
             console.log('🚀 Starting new AI suggestion stream');
+            console.log('🎯 DEBUGGING: About to check responseId and create element');
             
             // If we have a responseId, handle response accumulation
             if (data.responseId) {
@@ -1168,33 +1579,66 @@ ipcRenderer.on('suggestion-update', (event, data) => {
                     currentResponseId = data.responseId;
                     currentStreamingResponseText = data.content || '';
                     
-                    // Create new suggestion element (not yet appended to DOM)
-                    activeStreamingSuggestionElement = createNewSuggestionElement(data.title || '', currentStreamingResponseText);
-                    currentResponseElement = activeStreamingSuggestionElement;
+                    console.log('🎯 DEBUGGING: About to create new suggestion element');
+                    console.log(`🎯 DEBUGGING: title = "${data.title || ''}"`, `content = "${currentStreamingResponseText}"`);
                     
-                    // Append to DOM
-                    if (suggestionsContent) {
-                        suggestionsContent.appendChild(activeStreamingSuggestionElement);
-                        console.log('✅ New streaming suggestion element appended to DOM');
+                    try {
+                        // Create new suggestion element (not yet appended to DOM)
+                        activeStreamingSuggestionElement = createNewSuggestionElement(data.title || '', currentStreamingResponseText);
+                        currentResponseElement = activeStreamingSuggestionElement;
+                        console.log('🎯 DEBUGGING: Element created successfully');
+                        
+                        // Check if suggestionsContent exists
+                        console.log('🎯 DEBUGGING: Checking suggestionsContent...', !!suggestionsContent);
+                        if (suggestionsContent) {
+                            console.log('🎯 DEBUGGING: suggestionsContent found, appending element');
+                            suggestionsContent.appendChild(activeStreamingSuggestionElement);
+                            console.log('✅ New streaming suggestion element appended to DOM');
+                            console.log(`🎯 DEBUGGING: suggestionsContent now has ${suggestionsContent.children.length} children`);
+                        } else {
+                            console.error('❌ DEBUGGING: suggestionsContent not found!');
+                        }
+                    } catch (error) {
+                        console.error('❌ DEBUGGING: Error in element creation/append:', error);
+                        console.error(error.stack);
                     }
                 }
             }
             
-            // Render initial content
-            updateSuggestionContent(activeStreamingSuggestionElement, currentStreamingResponseText);
+            // Render initial content with unified real-time formatting from first chunk
+            console.log('🎨 UNIFIED: First chunk - using streaming formatter');
+            updateSuggestionContent(activeStreamingSuggestionElement, currentStreamingResponseText, false);
             return;
         }
         
         if (data.content && activeStreamingSuggestionElement) {
-            // Subsequent chunks of the same stream - append to accumulated text
-            console.log('📝 Appending chunk to existing AI suggestion stream');
+            // Check if this chunk is from the winning response
+            if (winningResponseId && data.responseId && data.responseId !== winningResponseId) {
+                console.log(`🛑 Ignoring chunk from ${data.responseId} - ${winningResponseId} already won`);
+                return;
+            }
+            
+            // Subsequent chunks of the same stream - append ONLY the new chunk
+            console.log('⚡ FAST APPEND: Adding only new chunk to existing content');
+            console.log(`  New chunk length: ${data.content.length}`);
+            console.log(`  Previous total: ${currentStreamingResponseText.length}`);
+            
+            // Accumulate for final processing
             currentStreamingResponseText += data.content;
             
-            // Re-render the entire accumulated content
-            updateSuggestionContent(activeStreamingSuggestionElement, currentStreamingResponseText);
+            // FAST INCREMENTAL: Append only the new chunk, don't re-render everything
+            appendOnlyNewChunk(activeStreamingSuggestionElement, data.content);
+            
+            console.log(`  New total: ${currentStreamingResponseText.length}`);
         }
         
         if (data.isComplete) {
+            // Check if this completion is from the winning response
+            if (winningResponseId && data.responseId && data.responseId !== winningResponseId) {
+                console.log(`🛑 Ignoring completion from ${data.responseId} - ${winningResponseId} already won`);
+                return;
+            }
+            
             // Stream is complete - final cleanup
             console.log('✅ AI suggestion stream completed');
             const completionTime = Date.now();
@@ -1202,10 +1646,36 @@ ipcRenderer.on('suggestion-update', (event, data) => {
             console.log(`[TIMING] 🎨 Final response content length: ${currentStreamingResponseText.length} chars`);
             console.log(`[TIMING] 🎨 Final response preview: "${currentStreamingResponseText.substring(0, 100)}${currentStreamingResponseText.length > 100 ? '...' : ''}"`);
             
-            // Final update with complete content
+            // Final update with complete content (hybrid: full markdown + syntax highlighting for perfect result)
             if (activeStreamingSuggestionElement && currentStreamingResponseText) {
-                updateSuggestionContent(activeStreamingSuggestionElement, currentStreamingResponseText);
+                console.log('🎨 FINAL RENDER: Applying complete markdown and syntax highlighting to final content');
+                console.log(`  Final content length: ${currentStreamingResponseText.length}`);
+                try {
+                    updateSuggestionContent(activeStreamingSuggestionElement, currentStreamingResponseText, true); // Final complete rendering
+                    console.log('✅ FINAL RENDER: Complete markdown and syntax highlighting applied');
+                } catch (error) {
+                    console.error('❌ DEBUGGING: Error in final render, falling back to simple text:', error);
+                    // Fallback: just set the text content directly
+                    const contentDiv = activeStreamingSuggestionElement.querySelector('.suggestion-content');
+                    if (contentDiv) {
+                        contentDiv.textContent = currentStreamingResponseText;
+                        console.log('✅ FALLBACK: Set content as plain text');
+                    }
+                }
+            } else {
+                console.log('⚠️ DEBUGGING: No active element or text for final render');
+                console.log(`  activeStreamingSuggestionElement: ${!!activeStreamingSuggestionElement}`);
+                console.log(`  currentStreamingResponseText: "${currentStreamingResponseText}"`);
             }
+            
+            // Clean up old suggestions to maintain limit
+            cleanupOldSuggestions();
+            
+            // CRITICAL FIX: Reset AI call tracking to allow new questions
+            // Clear lastAICallText after each response completes to enable subsequent AI calls
+            console.log('🔄 AI response completed - resetting call tracking to allow new questions');
+            lastAICallText = "";
+            // Note: winningResponseId is now reset when new first chunk arrives, not here
             
             // Only clear streaming state if we're not tracking by responseId
             // or if this completion matches our current response
@@ -1218,6 +1688,9 @@ ipcRenderer.on('suggestion-update', (event, data) => {
         // Handle non-streaming updates using the original logic
         console.log(`[TIMING] 🎨 Non-streaming suggestion rendered: ${data.content ? data.content.length : 0} chars`);
         addOrUpdateSuggestion(data.title || 'AI Suggestion', data.content);
+        
+        // Clean up old suggestions to maintain limit
+        cleanupOldSuggestions();
     }
 });
 
@@ -1236,6 +1709,9 @@ ipcRenderer.on('solution-generated', (event, data) => {
     
     if (data.isStreaming) {
         if (data.isFirstChunk) {
+            // Update processing status to show streaming has started
+            updateScreenshotProcessingStatus('Receiving Response...');
+            
             // Start of a new streaming response for screenshot solution
             console.log('🚀 Starting new screenshot solution stream');
             currentStreamingScreenshotText = data.content || '';
@@ -1249,8 +1725,8 @@ ipcRenderer.on('solution-generated', (event, data) => {
                 console.log('✅ New streaming screenshot solution element appended to DOM');
             }
             
-            // Render initial content
-            updateSuggestionContent(activeStreamingScreenshotElement, currentStreamingScreenshotText);
+            // Render initial content (hybrid: smart fast rendering for real-time feedback)
+            updateSuggestionContent(activeStreamingScreenshotElement, currentStreamingScreenshotText, false);
             return;
         }
         
@@ -1259,18 +1735,30 @@ ipcRenderer.on('solution-generated', (event, data) => {
             console.log('📝 Appending chunk to existing screenshot solution stream');
             currentStreamingScreenshotText += data.content;
             
-            // Re-render the entire accumulated content
-            updateSuggestionContent(activeStreamingScreenshotElement, currentStreamingScreenshotText);
+            // Re-render the entire accumulated content (hybrid: smart fast rendering with code formatting)
+            updateSuggestionContent(activeStreamingScreenshotElement, currentStreamingScreenshotText, false);
         }
         
         if (data.isComplete) {
             // Stream is complete - final cleanup
             console.log('✅ Screenshot solution stream completed');
             
-            // Final update with complete content
+            // Hide processing indicator
+            hideScreenshotProcessing();
+            
+            // Final update with complete content - full markdown processing
             if (activeStreamingScreenshotElement && currentStreamingScreenshotText) {
-                updateSuggestionContent(activeStreamingScreenshotElement, currentStreamingScreenshotText);
+                updateSuggestionContent(activeStreamingScreenshotElement, currentStreamingScreenshotText, true);
+                console.log('🎨 Screenshot solution final chunk processed with full markdown');
             }
+            
+            // Clean up old suggestions to maintain limit
+            cleanupOldSuggestions();
+            
+            // CRITICAL FIX: Reset AI call tracking to allow new questions after screenshot solutions
+            console.log('🔄 Screenshot solution completed - resetting call tracking to allow new questions');
+            lastAICallText = "";
+            // Note: winningResponseId is now reset when new first chunk arrives, not here
             
             // Clear streaming state
             activeStreamingScreenshotElement = null;
@@ -1279,12 +1767,24 @@ ipcRenderer.on('solution-generated', (event, data) => {
     } else {
         // Handle non-streaming screenshot solutions - always create new suggestion
         addScreenshotSolution(data.title || "Screenshot Solution", data.content);
+        
+        // Clean up old suggestions to maintain limit
+        cleanupOldSuggestions();
+        
+        // Hide processing indicator for non-streaming responses
+        hideScreenshotProcessing();
     }
 });
 
 ipcRenderer.on('solution-error', (event, { title, content }) => {
+    // Hide processing indicator on error
+    hideScreenshotProcessing();
+    
     // Screenshot solution errors should also create new suggestions
     addScreenshotSolution(title || "Error Generating Screenshot Solution", content);
+    
+    // Clean up old suggestions to maintain limit
+    cleanupOldSuggestions();
 });
 
 // Listen for timing updates from main process
@@ -1311,6 +1811,9 @@ ipcRenderer.on('timing-update', (event, data) => {
         case 'ai_first_chunk_received':
             console.log(`[TIMING] 🚀 First AI chunk: ${data.time_to_first_chunk}ms, ${data.chunk_length} chars`);
             break;
+        case 'screenshot_first_chunk_received':
+            console.log(`[TIMING] 🚀 First SCREENSHOT chunk: ${data.time_from_api_call}ms, ${data.chunk_length} chars`);
+            break;
         case 'ai_race_winner':
             console.log(`[TIMING] 🏆 ${data.winner} won race in ${data.race_duration}ms`);
             break;
@@ -1329,7 +1832,7 @@ ipcRenderer.on('global-screenshot-trigger', () => {
 ipcRenderer.on('global-clear-trigger', () => {
     // Show immediate feedback to user
     updateStatus('Clearing...', 'yellow-500');
-    showNotification("Clearing", "Clearing transcript, suggestions, conversation history, and resetting speech recognition...");
+    showNotification("Clearing", "Clearing transcript, suggestions, and conversation history...");
     clearTranscriptAndSuggestions();
     
     // Also clear the conversation history in the backend
@@ -1338,6 +1841,9 @@ ipcRenderer.on('global-clear-trigger', () => {
     // Reset the Google STT service for a completely fresh start
     isResettingSTT = true;
     ipcRenderer.send('reset-stt');
+    
+    // Note: We preserve AI system prompts so job context remains intact
+    console.log('🗑️ Cleared transcript and conversation - AI job context preserved');
 });
 
 // Handle global mute trigger from main process
@@ -1350,6 +1856,10 @@ ipcRenderer.on('global-solve-trigger', () => {
     // Cmd/Ctrl + Enter triggers screenshot solution
     if (screenshotImages.length > 0) {
         const screenshotCount = screenshotImages.length;
+        
+        // Show processing indicator
+        showScreenshotProcessing(screenshotCount);
+        
         ipcRenderer.send('generate-screenshot-solution', { screenshots: screenshotImages, jobRole, keySkills });
         showNotification("AI Processing", `Analyzing ${screenshotCount} screenshot(s)... Screenshots cleared for fresh captures.`);
         // Clear screenshots after sending for processing
@@ -1362,35 +1872,42 @@ ipcRenderer.on('global-solve-trigger', () => {
 // Handle VAD voice activity events for smart AI calling
 ipcRenderer.on('vad-voice-activity', (event, data) => {
     if (data.type === 'voice-stopped') {
-        // Start 1-second timer when voice stops
+        // Start 3-second timer when voice stops (increased from 1 second for more complete thoughts)
         if (vadSilenceTimer) {
             clearTimeout(vadSilenceTimer);
         }
         
         vadSilenceTimer = setTimeout(() => {
-            // After 1 second of silence, check if we should call AI
+            // After 3 seconds of silence, check if we should call AI (full context mode)
             const currentText = transcriptBuffer.trim();
             
-            // Only call AI if we have meaningful content and it's significantly different
-            if (currentText && currentText.length > 10) {
-                const contentSimilarity = calculateContentSimilarity(currentText, lastAICallText);
-                const hasSignificantChange = contentSimilarity < 0.85; // Updated to match new primary condition
+            // Only call AI if we have meaningful content with natural breaks or complete questions
+            if (currentText && currentText.length > 5) { // Lowered threshold from 15 to 5 for testing
+                const hasNaturalBreak = /[.!?](?:\s|$)/.test(currentText);
+                const looksLikeCompleteQuestion = /\b(write|create|make|build|show|generate|give|tell|explain|how|what|when|where|why|code|program|function|algorithm|script)\b.*\b(code|function|program|script|algorithm|fibonacci|fibunachi|sequence|series|sort|search|loop|array|list|string|number|calculate|find|get|return)\b/i.test(currentText);
                 
-                console.log(`📊 VAD AI Call Check:`);
-                console.log(`   Text length: ${currentText.length} (min 10: ${currentText.length > 10})`);
-                console.log(`   Similarity: ${(contentSimilarity * 100).toFixed(1)}% (threshold: <85%: ${hasSignificantChange})`);
+                console.log(`📊 VAD AI Call Check (Full Context Mode):`);
+                console.log(`   Text length: ${currentText.length} (min 5: ${currentText.length > 5})`);
+                console.log(`   Natural break: ${hasNaturalBreak}`);
+                console.log(`   Complete question: ${looksLikeCompleteQuestion}`);
                 
-                if (hasSignificantChange) {
-                    console.log('🤖 Calling AI after 1-second VAD silence - significant new content');
-                    callAIWithParagraph(currentText);
+                // Call AI on natural breaks or complete questions (similarity check removed)
+                if (hasNaturalBreak || looksLikeCompleteQuestion) {
+                    console.log('🤖 VAD: Calling AI after silence - complete thought with full context');
+                    console.log('🤖 Note: AI processing with full conversation context');
+                    lastAICallText = currentText;
+                    // Note: Actual AI call is handled by recording service with full context
                 } else {
-                    console.log(`🤖 Skipping VAD silence AI call - content too similar (${(contentSimilarity * 100).toFixed(1)}% >= 85%)`);
+                    console.log(`🤖 VAD: Skipping AI call - waiting for complete thought or natural break`);
+                    if (!hasNaturalBreak && !looksLikeCompleteQuestion) {
+                        console.log(`   No natural break or complete question detected`);
+                    }
                 }
             } else {
-                console.log(`❌ VAD silence - insufficient length (${currentText.length} <= 10 chars)`);
+                console.log(`❌ VAD silence - insufficient length (${currentText.length} <= 5 chars)`);
             }
             vadSilenceTimer = null;
-        }, VAD_SILENCE_THRESHOLD);
+        }, VAD_SILENCE_THRESHOLD); // Use the updated 3-second threshold
         
     } else if (data.type === 'voice-started') {
         // Clear silence timer when voice starts again
@@ -1401,9 +1918,11 @@ ipcRenderer.on('vad-voice-activity', (event, data) => {
     }
 });
 
-// Click-through toggle removed - always enabled
+// Click-through is now ENABLED by default - overlay passes mouse events through
 
 window.addEventListener('DOMContentLoaded', async () => {
+    // Initialize memory management
+    initializeOverlayMemoryManagement();
     updateStatus('Standby', 'yellow-500');
     
     // Add listener for CSP violations to help diagnose issues
@@ -1432,29 +1951,24 @@ window.addEventListener('DOMContentLoaded', async () => {
     const muteListenHint = document.getElementById('muteListenHint');
     if (muteListenHint) muteListenHint.innerHTML = `Mute:<kbd>⌘</kbd><kbd>L</kbd>`;
     
-    // Ensure suggestions area allows scrolling
+    // Ensure both areas allow scrolling with proper scrollbar handling
     const suggestionsArea = document.getElementById('suggestionsArea');
     const transcriptArea = document.getElementById('transcriptArea');
     
     if (suggestionsArea) {
-        // Add scroll event listener to verify scrolling works
-        suggestionsArea.addEventListener('scroll', (e) => {
-            console.log('🖱️ Suggestions area scrolled:', e.target.scrollTop);
-        });
-        
-        // Force enable pointer events for scrollbar area
         suggestionsArea.style.pointerEvents = 'auto';
-        console.log('✅ Suggestions area scroll enabled');
-        
-        // Add mouse event handlers for scrollbar dragging
         setupScrollbarDragHandling(suggestionsArea);
+        console.log('✅ Suggestions area scroll enabled with scrollbar handling');
     }
     
     if (transcriptArea) {
         transcriptArea.style.pointerEvents = 'auto';
         setupScrollbarDragHandling(transcriptArea);
-        console.log('✅ Transcript area scroll enabled');
+        console.log('✅ Transcript area scroll enabled with scrollbar handling');
     }
+    
+    // Initialize hotkey handling for AI suggestions scrolling
+    setupHotkeyHandling();
     
     // Initialize screen protection toggle
     initScreenProtectionToggle();
@@ -1462,12 +1976,12 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Setup toggle to be clickable in click-through mode
     setupProtectionToggle();
     
-    // Apply fixed transparency (no slider)
+    // Apply glass effects
     applyTransparency();
     
     ipcRenderer.on("recording-status", (_, status, timestamp) => {
         if (status === "LIVE_TRANSCRIPTION_STARTED") {
-            updateStatus(isMuted ? 'Muted' : 'Recording', isMuted ? 'red-500' : 'green-500');
+            updateStatus(isMuted ? 'Muted' : 'Recording', isMuted ? '#ff0000' : '#00ff88');
             isRecording = true;
             
             // Check if this was a reset completion
@@ -1519,49 +2033,70 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
 }); 
 
-// Replace applyTransparency function with fixed values
+// Import the consolidated overlay renderer styles
+const overlayRendererStyles = require('../../utils/overlay-renderer-styles');
+
+// Apply transparency directly with our exact values - no dependency on broken IPC
 function applyTransparency() {
-    // Fixed maximum opacity (150%)
-    const normalizedOpacity = 1.5;
+    console.log('🎨 Applying direct transparency with exact values...');
     
-    // Only apply to transcript and suggestions areas
     const transcriptArea = document.getElementById('transcriptArea');
     const suggestionsArea = document.getElementById('suggestionsArea');
+    const headerBar = document.querySelector('.header-bar');
+    const statusBar = document.querySelector('.status-bar');
     
-    // Use consistent background color for both areas
-    const backgroundColor = `rgba(26, 32, 44, ${Math.min(normalizedOpacity * 0.4, 0.9)})`;
+    if (transcriptArea) {
+        transcriptArea.style.backgroundColor = 'rgba(26, 32, 44, 0.3)'; // 70% transparency
+        transcriptArea.style.backdropFilter = 'blur(12px) saturate(120%)';
+        transcriptArea.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+        transcriptArea.style.color = '#ffffff'; // Bright white text
+        console.log('✅ Applied direct transparency to transcript area');
+    }
     
-    if (transcriptArea) transcriptArea.style.backgroundColor = backgroundColor;
-    if (suggestionsArea) suggestionsArea.style.backgroundColor = backgroundColor;
+    if (suggestionsArea) {
+        suggestionsArea.style.backgroundColor = 'rgba(26, 32, 44, 0.75)'; // 25% transparency (less transparent)
+        suggestionsArea.style.backdropFilter = 'blur(20px) saturate(140%)'; // Increased blur and saturation
+        suggestionsArea.style.border = '1px solid rgba(255, 255, 255, 0.12)';
+        suggestionsArea.style.borderLeft = '2px solid rgba(255, 255, 255, 0.15)';
+        suggestionsArea.style.color = '#f3f4f6';
+        console.log('✅ Applied direct transparency to suggestions area');
+    }
     
-    // Update suggestion containers to match the area background
-    const suggestionContainers = document.querySelectorAll('.suggestion-container');
-    suggestionContainers.forEach(container => {
-        container.style.backgroundColor = 'transparent';
-        container.style.borderBottomColor = `rgba(255, 255, 255, ${Math.min(normalizedOpacity * 0.1, 0.2)})`;
-    });
+    if (headerBar) {
+        headerBar.style.backgroundColor = 'rgba(0, 0, 0, 0.2)';
+        headerBar.style.backdropFilter = 'blur(20px) saturate(150%)';
+        headerBar.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+        headerBar.style.color = '#ffffff';
+        console.log('✅ Applied direct transparency to header bar');
+    }
     
-    // Update transcript lines to be transparent (no background)
-    const transcriptLines = document.querySelectorAll('.transcript-line-final, .transcript-line-interim');
-    transcriptLines.forEach(line => {
-        line.style.backgroundColor = 'transparent';
-    });
+    if (statusBar) {
+        statusBar.style.backgroundColor = 'rgba(0, 0, 0, 0.2)';
+        statusBar.style.backdropFilter = 'blur(20px) saturate(150%)';
+        statusBar.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+        console.log('✅ Applied direct transparency to status bar');
+    }
+    
+    console.log('🎨 Direct transparency application complete');
 }
 
 // Handle window-hidden event to clean up resources
 ipcRenderer.on('window-hidden', () => {
     console.log('📝 Renderer received window-hidden event - cleaning up resources');
     
-    // Clear any timers
+    // Clear any timers using managed cleanup
     if (pauseTimer) {
-        clearTimeout(pauseTimer);
+        clearManagedTimeout(pauseTimer);
         pauseTimer = null;
     }
     
     if (vadSilenceTimer) {
-        clearTimeout(vadSilenceTimer);
+        clearManagedTimeout(vadSilenceTimer);
         vadSilenceTimer = null;
     }
+    
+    // Perform emergency memory cleanup when window is hidden
+    emergencyMemoryCleanup();
     
     // Cancel any pending animations or resource-intensive operations
     // This helps prevent CSP violations during hide/unhide cycles
@@ -1592,57 +2127,472 @@ ipcRenderer.on('window-shown', () => {
         
         console.log('🔄 Delayed resource reinitialization complete');
     }, 100);
+}); 
+
+// Test IPC connectivity
+ipcRenderer.on('test-ipc', (event, data) => {
+    console.log('🧪 TEST IPC: Event received in overlay:', data);
 });
 
-ipcRenderer.on('recording-status', (event, status, timestamp) => {
-    if (status === "LIVE_TRANSCRIPTION_STARTED") {
-        updateStatus(isMuted ? 'Muted' : 'Recording', isMuted ? 'red-500' : 'green-500');
-        isRecording = true;
-        
-        // Check if this was a reset completion
-        if (isResettingSTT) {
-            isResettingSTT = false;
-            showNotification("Reset Complete", "Audio transcription restarted successfully!");
-            console.log("✅ STT reset completed successfully");
-        }
-        
-        // If timestamp is provided, store it as recording start time
-        if (timestamp) {
-            timingData.recording_started = timestamp;
-            console.log(`[TIMING] Recording started at: ${new Date(timestamp).toISOString()}`);
-        }
-    } else if (status === "LIVE_TRANSCRIPTION_STOPPED") {
-        // Clear any existing pause timer
-        if (pauseTimer) {
-            clearTimeout(pauseTimer);
-            pauseTimer = null;
-        }
-        
-        // Clear VAD silence timer
-        if (vadSilenceTimer) {
-            clearTimeout(vadSilenceTimer);
-            vadSilenceTimer = null;
-        }
-        
-        if (currentTranscriptLineElement && transcriptBuffer) { // Finalize any pending line
-            finalizeCurrentLine();
-        }
-        
-        // Only update to standby if not in the middle of a reset
-        if (!isResettingSTT) {
-            updateStatus('Standby', 'yellow-500');
-        }
-        isRecording = false;
-        
-        // If timestamp is provided, store it as recording stop time
-        if (timestamp) {
-            timingData.recording_stopped = timestamp;
-            console.log(`[TIMING] Recording stopped at: ${new Date(timestamp).toISOString()}`);
-        }
-    } else if (status === "LIVE_TRANSCRIPTION_FAILED_TO_START") {
-        updateStatus('Error', 'red-500');
-        isRecording = false;
-        isResettingSTT = false;
-        showNotification("Reset Failed", "Failed to restart audio transcription. Please try again.");
+// Initialize overlay on DOM load
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('📄 Overlay DOM loaded, testing IPC connectivity...');
+    
+    // Test if we can send messages back to main
+    try {
+        console.log('📡 Testing IPC send to main process...');
+        ipcRenderer.send('test-ipc-from-overlay', { message: 'Overlay renderer is ready' });
+        console.log('✅ IPC send test completed');
+    } catch (error) {
+        console.error('❌ IPC send test failed:', error);
     }
 }); 
+
+// Initialize marked with enhanced syntax highlighting
+marked.use({
+    gfm: true,
+    breaks: true,
+    headerIds: false,
+    mangle: false,
+    highlight: function(code, lang) {
+        console.log('🎨 marked.highlight: Processing code block with language:', lang);
+        
+        if (typeof hljs !== 'undefined') {
+            let highlightedCode = '';
+            let detectedLang = lang;
+            
+            try {
+                if (lang && hljs.getLanguage(lang)) {
+                    // Use specified language
+                    highlightedCode = hljs.highlight(code, { language: lang, ignoreIllegals: true }).value;
+                    console.log('✅ marked.highlight: Successfully highlighted with specified language:', lang);
+                } else {
+                    // Try to auto-detect language
+                    const result = hljs.highlightAuto(code, ['javascript', 'python', 'java', 'cpp', 'csharp', 'ruby', 'go', 'sql', 'html', 'css', 'json']);
+                    highlightedCode = result.value;
+                    detectedLang = result.language || 'text';
+                    console.log('🔍 marked.highlight: Auto-detected language:', detectedLang, 'confidence:', result.relevance);
+                }
+                
+                // Return just the highlighted code (no wrapper) - the renderer will add the <code> wrapper
+                return highlightedCode;
+                
+            } catch (e) {
+                console.error('❌ marked.highlight: Error highlighting code:', e);
+                // Fallback to basic highlighting
+                try {
+                    const fallback = hljs.highlightAuto(code);
+                    return fallback.value;
+                } catch (fallbackError) {
+                    console.error('❌ marked.highlight: Fallback also failed:', fallbackError);
+                    return code; // Plain code as last resort
+                }
+            }
+        } else {
+            console.warn('⚠️ marked.highlight: hljs not available, returning plain code');
+            return code;
+        }
+    },
+    renderer: {
+        code(code, infostring, escaped) {
+            const lang = (infostring || '').match(/\S*/)[0];
+            const langAttr = lang ? ` data-language="${lang}"` : '';
+            
+            // Generate line numbers for multi-line code
+            const lines = code.split('\n');
+            const lineNumbers = lines.map((_, index) => (index + 1).toString()).join('\n');
+            const lineNumbersAttr = ` data-line-numbers="${lineNumbers}"`;
+            
+            if (this.options.highlight) {
+                const out = this.options.highlight(code, lang);
+                if (out != null && out !== code) {
+                    escaped = true;
+                    code = out;
+                }
+            }
+            
+            return `<pre${langAttr}${lineNumbersAttr}><code class="hljs ${lang ? `language-${lang}` : ''}"${langAttr}>${escaped ? code : escape(code)}</code></pre>\n`;
+        }
+    }
+});
+
+// Add hotkey functionality for scrolling AI suggestions
+function setupHotkeyHandling() {
+    document.addEventListener('keydown', (e) => {
+        // Check for SHIFT + Arrow Up/Down (and NOT CMD/Meta key)
+        if (e.shiftKey && !e.metaKey && !e.ctrlKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const suggestionsArea = document.getElementById('suggestionsArea');
+            if (!suggestionsArea) return;
+            
+            const scrollAmount = 150; // pixels to scroll - increased for better visibility
+            
+            if (e.key === 'ArrowUp') {
+                // Smooth scroll up
+                suggestionsArea.scrollBy({
+                    top: -scrollAmount,
+                    behavior: 'smooth'
+                });
+                console.log('⬆️ Scrolled AI suggestions up via SHIFT+Arrow hotkey');
+            } else if (e.key === 'ArrowDown') {
+                // Smooth scroll down
+                suggestionsArea.scrollBy({
+                    top: scrollAmount,
+                    behavior: 'smooth'
+                });
+                console.log('⬇️ Scrolled AI suggestions down via SHIFT+Arrow hotkey');
+            }
+            return; // Exit early to prevent any other processing
+        }
+        
+        // Let CMD + Arrow keys pass through for window movement (don't interfere)
+        if (e.metaKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+            // Don't prevent default - let these pass through for window movement
+            console.log(`🪟 CMD + ${e.key} - allowing window movement (not scrolling AI suggestions)`);
+            return;
+        }
+    });
+    
+    console.log('⌨️ Hotkey handling initialized - SHIFT + Arrow Up/Down to scroll AI suggestions, CMD + Arrows for window movement');
+}
+
+// --- Memory Management & Cleanup Functions ---
+
+// Global cleanup tracker
+let globalCleanupInterval = null;
+let activeTimeouts = new Set();
+let activeIntervals = new Set();
+
+// Enhanced setTimeout wrapper for cleanup tracking
+function managedSetTimeout(callback, delay) {
+    const timeoutId = setTimeout(() => {
+        activeTimeouts.delete(timeoutId);
+        callback();
+    }, delay);
+    activeTimeouts.add(timeoutId);
+    return timeoutId;
+}
+
+// Enhanced setInterval wrapper for cleanup tracking
+function managedSetInterval(callback, delay) {
+    const intervalId = setInterval(callback, delay);
+    activeIntervals.add(intervalId);
+    return intervalId;
+}
+
+// Clear specific timeout and remove from tracking
+function clearManagedTimeout(timeoutId) {
+    if (timeoutId) {
+        clearTimeout(timeoutId);
+        activeTimeouts.delete(timeoutId);
+    }
+}
+
+// Clear specific interval and remove from tracking
+function clearManagedInterval(intervalId) {
+    if (intervalId) {
+        clearInterval(intervalId);
+        activeIntervals.delete(intervalId);
+    }
+}
+
+// Emergency memory cleanup function
+function emergencyMemoryCleanup() {
+    console.log('🧹 EMERGENCY: Performing deep memory cleanup...');
+    
+    // Clear all tracked timeouts and intervals
+    activeTimeouts.forEach(id => clearTimeout(id));
+    activeIntervals.forEach(id => clearInterval(id));
+    activeTimeouts.clear();
+    activeIntervals.clear();
+    
+    // Clear streaming states
+    currentStreamingResponseText = "";
+    currentStreamingScreenshotText = "";
+    activeStreamingSuggestionElement = null;
+    activeStreamingScreenshotElement = null;
+    
+    // Force garbage collection of large objects
+    if (typeof global !== 'undefined' && global.gc) {
+        global.gc();
+        console.log('🗑️ Manual garbage collection triggered');
+    }
+    
+    console.log('✅ Emergency memory cleanup completed');
+}
+
+// Enhanced periodic cleanup with memory monitoring
+function performEnhancedPeriodicCleanup() {
+    console.log('🧹 Enhanced periodic cleanup starting...');
+    
+    // Standard cleanup
+    cleanupOldTranscriptLines();
+    cleanupOldSuggestions();
+    
+    // Clear inactive timeouts/intervals
+    let clearedTimeouts = 0;
+    let clearedIntervals = 0;
+    
+    activeTimeouts.forEach(id => {
+        // Clear very old timeouts (unlikely to still be valid)
+        clearTimeout(id);
+        clearedTimeouts++;
+    });
+    activeTimeouts.clear();
+    
+    // Memory usage check and alert
+    if (typeof process !== 'undefined' && process.memoryUsage) {
+        const memUsage = process.memoryUsage();
+        const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+        console.log(`💾 Renderer memory usage: ${heapUsedMB} MB`);
+        
+        if (heapUsedMB > 150) {
+            console.warn(`⚠️ High renderer memory usage detected: ${heapUsedMB} MB`);
+            emergencyMemoryCleanup();
+        }
+    }
+    
+    console.log(`🧹 Cleanup completed: ${clearedTimeouts} timeouts, ${clearedIntervals} intervals cleared`);
+}
+
+// --- Enhanced cleanup functions (using existing constants) ---
+
+// Set up enhanced periodic cleanup every 30 seconds (more frequent)
+if (globalCleanupInterval) {
+    clearInterval(globalCleanupInterval);
+}
+globalCleanupInterval = managedSetInterval(performEnhancedPeriodicCleanup, 30000);
+
+// --- Enhanced Functions with Memory Management ---
+
+// Add comprehensive memory management tracking
+const overlayActiveTimers = new Set();
+const overlayActiveIntervals = new Set();
+const overlayActiveEventListeners = new Map();
+const overlayCleanupInterval = 30000; // 30 seconds
+
+// Enhanced timer wrappers with cleanup tracking
+function setTimeoutSafe(callback, delay, label = 'overlay-timer') {
+    const timerId = setTimeout(() => {
+        overlayActiveTimers.delete(timerId);
+        try {
+            callback();
+        } catch (error) {
+            console.error(`Timer callback error (${label}):`, error);
+        }
+    }, delay);
+    overlayActiveTimers.add(timerId);
+    console.log(`🔧 Overlay timer created: ${label} (${overlayActiveTimers.size} active)`);
+    return timerId;
+}
+
+function clearTimeoutSafe(timerId, label = 'overlay-timer') {
+    if (timerId) {
+        clearTimeout(timerId);
+        overlayActiveTimers.delete(timerId);
+        console.log(`🧹 Overlay timer cleared: ${label} (${overlayActiveTimers.size} remaining)`);
+    }
+}
+
+function setIntervalSafe(callback, delay, label = 'overlay-interval') {
+    const intervalId = setInterval(() => {
+        try {
+            callback();
+        } catch (error) {
+            console.error(`Interval callback error (${label}):`, error);
+        }
+    }, delay);
+    overlayActiveIntervals.add(intervalId);
+    console.log(`⏰ Overlay interval created: ${label} (${overlayActiveIntervals.size} active)`);
+    return intervalId;
+}
+
+function clearIntervalSafe(intervalId, label = 'overlay-interval') {
+    if (intervalId) {
+        clearInterval(intervalId);
+        overlayActiveIntervals.delete(intervalId);
+        console.log(`🧹 Overlay interval cleared: ${label} (${overlayActiveIntervals.size} remaining)`);
+    }
+}
+
+// Enhanced event listener tracking
+function addEventListenerSafe(element, event, handler, options, label = 'overlay-listener') {
+    element.addEventListener(event, handler, options);
+    
+    if (!overlayActiveEventListeners.has(element)) {
+        overlayActiveEventListeners.set(element, new Map());
+    }
+    
+    const elementListeners = overlayActiveEventListeners.get(element);
+    if (!elementListeners.has(event)) {
+        elementListeners.set(event, []);
+    }
+    
+    elementListeners.get(event).push({ handler, options, label });
+    console.log(`👂 Event listener added: ${label} (${getTotalListeners()} total)`);
+}
+
+function removeEventListenerSafe(element, event, handler, options) {
+    element.removeEventListener(event, handler, options);
+    
+    const elementListeners = overlayActiveEventListeners.get(element);
+    if (elementListeners && elementListeners.has(event)) {
+        const listeners = elementListeners.get(event);
+        const index = listeners.findIndex(l => l.handler === handler);
+        if (index !== -1) {
+            const removed = listeners.splice(index, 1)[0];
+            console.log(`🧹 Event listener removed: ${removed.label} (${getTotalListeners()} remaining)`);
+        }
+    }
+}
+
+function getTotalListeners() {
+    let total = 0;
+    overlayActiveEventListeners.forEach(elementMap => {
+        elementMap.forEach(listeners => {
+            total += listeners.length;
+        });
+    });
+    return total;
+}
+
+// Memory cleanup functions
+function performOverlayCleanup() {
+    console.log(`🧹 Overlay cleanup: ${overlayActiveTimers.size} timers, ${overlayActiveIntervals.size} intervals, ${getTotalListeners()} listeners`);
+    
+    // Limit transcript and suggestion elements
+    limitTranscriptElements();
+    limitSuggestionElements();
+    
+    // Clear old timing data
+    if (Object.keys(timingData).length > 20) {
+        const keys = Object.keys(timingData).sort();
+        const toKeep = keys.slice(-10); // Keep latest 10
+        const newTimingData = {};
+        toKeep.forEach(key => {
+            newTimingData[key] = timingData[key];
+        });
+        timingData = newTimingData;
+        console.log('🧹 Timing data trimmed to 10 entries');
+    }
+    
+    // Force garbage collection if available
+    if (window.gc) {
+        window.gc();
+    }
+}
+
+function emergencyOverlayCleanup() {
+    console.log('🚨 EMERGENCY OVERLAY CLEANUP');
+    
+    // Clear all timers
+    overlayActiveTimers.forEach(timerId => {
+        try {
+            clearTimeout(timerId);
+        } catch (e) {
+            console.warn('Failed to clear overlay timer:', e);
+        }
+    });
+    overlayActiveTimers.clear();
+    
+    // Clear all intervals
+    overlayActiveIntervals.forEach(intervalId => {
+        try {
+            clearInterval(intervalId);
+        } catch (e) {
+            console.warn('Failed to clear overlay interval:', e);
+        }
+    });
+    overlayActiveIntervals.clear();
+    
+    // Clear VAD silence timer
+    if (vadSilenceTimer) {
+        clearTimeout(vadSilenceTimer);
+        vadSilenceTimer = null;
+    }
+    
+    // Clear pause timer
+    if (pauseTimer) {
+        clearTimeout(pauseTimer);
+        pauseTimer = null;
+    }
+    
+    // Reset streaming states
+    lastAICallText = "";
+    transcriptBuffer = "";
+    currentInterimText = "";
+    
+    // Perform standard cleanup
+    performOverlayCleanup();
+    
+    console.log('✅ Emergency overlay cleanup completed');
+}
+
+// Export cleanup functions for main process access
+window.overlayCleanup = {
+    performOverlayCleanup,
+    emergencyOverlayCleanup,
+    overlayActiveTimers,
+    overlayActiveIntervals,
+    overlayActiveEventListeners
+};
+
+function limitTranscriptElements() {
+    const transcriptContainer = document.getElementById('transcript-container');
+    if (transcriptContainer) {
+        const children = transcriptContainer.children;
+        if (children.length > MAX_TRANSCRIPT_LINES) {
+            const toRemove = children.length - MAX_TRANSCRIPT_LINES;
+            for (let i = 0; i < toRemove; i++) {
+                if (children[0]) {
+                    children[0].remove();
+                }
+            }
+            console.log(`🧹 Removed ${toRemove} old transcript elements`);
+        }
+    }
+}
+
+function limitSuggestionElements() {
+    const suggestionsContainer = document.getElementById('suggestions-container');
+    if (suggestionsContainer) {
+        const children = suggestionsContainer.children;
+        if (children.length > MAX_SUGGESTIONS) {
+            const toRemove = children.length - MAX_SUGGESTIONS;
+            for (let i = 0; i < toRemove; i++) {
+                if (children[0]) {
+                    children[0].remove();
+                }
+            }
+            console.log(`🧹 Removed ${toRemove} old suggestion elements`);
+        }
+    }
+}
+
+// Start periodic cleanup
+const overlayMainCleanupInterval = setIntervalSafe(performOverlayCleanup, overlayCleanupInterval, 'overlay-cleanup');
+
+// Helper functions for memory management
+function initializeOverlayMemoryManagement() {
+    // Add window focus/blur cleanup
+    addEventListenerSafe(window, 'blur', () => {
+        console.log('🔍 Window lost focus - performing light cleanup');
+        performOverlayCleanup();
+    }, false, 'window-blur-cleanup');
+
+    // Add page unload cleanup
+    addEventListenerSafe(window, 'beforeunload', () => {
+        console.log('🛑 Page unloading - performing emergency cleanup');
+        emergencyOverlayCleanup();
+    }, false, 'window-unload-cleanup');
+
+    // Add visibility change cleanup
+    addEventListenerSafe(document, 'visibilitychange', () => {
+        if (document.hidden) {
+            console.log('👁️ Page hidden - performing cleanup');
+            performOverlayCleanup();
+        }
+    }, false, 'visibility-change-cleanup');
+}

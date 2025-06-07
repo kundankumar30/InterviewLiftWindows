@@ -3,6 +3,7 @@ const { promisify } = require('util');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const sudo = require('sudo-prompt');
 
 const execAsync = promisify(exec);
 
@@ -133,12 +134,85 @@ class WindowsPermissionManager {
         } catch (error) {
             console.error('Error testing system audio access with C# recorder:', error);
             
-            // If the recorder test fails, we'll assume basic audio access is available
+            // Try with admin privileges as a fallback
+            console.log('🔐 Attempting system audio test with admin privileges...');
+            try {
+                const adminResult = await this.testSystemAudioWithAdmin();
+                if (adminResult.granted) {
+                    return {
+                        granted: true,
+                        status: 'SYSTEM_AUDIO_ADMIN_REQUIRED',
+                        details: 'Audio access available with administrator privileges',
+                        requiresAdmin: true
+                    };
+                }
+            } catch (adminError) {
+                console.error('Admin audio test also failed:', adminError);
+            }
+            
+            // If both normal and admin tests fail, we'll assume basic audio access is available
             // This prevents blocking the app from starting due to permission test failures
             return {
-                granted: true,
-                status: 'SYSTEM_AUDIO_ASSUMED_AVAILABLE',
-                error: 'Audio test failed but assuming basic availability'
+                granted: false,
+                status: 'SYSTEM_AUDIO_NOT_AVAILABLE',
+                error: 'Audio test failed even with admin privileges'
+            };
+        }
+    }
+
+    /**
+     * Test system audio access with administrator privileges
+     */
+    async testSystemAudioWithAdmin() {
+        try {
+            const recorderPath = this.getRecorderPath();
+            if (!recorderPath) {
+                return {
+                    granted: false,
+                    status: 'RECORDER_NOT_FOUND',
+                    error: 'C# Recorder executable not found'
+                };
+            }
+
+            return new Promise((resolve) => {
+                const command = `"${recorderPath}" --test-audio-quick`;
+                const options = {
+                    name: 'Interview Lift System Audio Test'
+                };
+
+                sudo.exec(command, options, (error, stdout, stderr) => {
+                    if (error) {
+                        console.error('❌ Admin audio test failed:', error.message);
+                        resolve({
+                            granted: false,
+                            status: 'ADMIN_AUDIO_TEST_FAILED',
+                            error: error.message
+                        });
+                        return;
+                    }
+
+                    console.log('✅ Admin audio test output:', stdout);
+                    
+                    // Parse the response - look for AUDIO_AVAILABLE or SUCCESS
+                    const hasAudioAccess = stdout.includes('AUDIO_AVAILABLE') || 
+                                           stdout.includes('SUCCESS') ||
+                                           stdout.includes('PERMISSION_GRANTED');
+                    
+                    resolve({
+                        granted: hasAudioAccess,
+                        status: hasAudioAccess ? 'ADMIN_AUDIO_SUCCESS' : 'ADMIN_AUDIO_LIMITED',
+                        details: stdout.trim(),
+                        error: stderr ? stderr.trim() : null
+                    });
+                });
+            });
+
+        } catch (error) {
+            console.error('Error in admin audio test:', error);
+            return {
+                granted: false,
+                status: 'ADMIN_TEST_ERROR',
+                error: error.message
             };
         }
     }

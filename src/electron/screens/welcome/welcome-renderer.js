@@ -278,13 +278,23 @@ window.addEventListener('DOMContentLoaded', () => {
       const userData = {
         jobRole: jobRoleInput.value.trim(),
         keySkills: keySkillsInput.value.trim(),
-        // Hardcode to EN-US
+        // Hardcode to EN-IN
         uiLanguage: 'en',
-        transcriptionLanguage: 'en-US',
+        transcriptionLanguage: 'en-IN',
         aiLanguage: 'en'
       };
-      // Store user data and navigate to overlay screen
+      
+      // Store user data and initialize AI system prompts
       localStorage.setItem('userData', JSON.stringify(userData));
+      
+      // Send system prompt initialization to main process BEFORE navigating
+      console.log('🤖 Initializing AI system prompts with job context...');
+      ipcRenderer.send('initialize-ai-system-prompts', {
+        jobRole: userData.jobRole,
+        keySkills: userData.keySkills
+      });
+      
+      // Navigate to overlay screen after system prompt setup
       ipcRenderer.send('navigate', 'overlay');
     } else {
       alert('Please fill in both Job Role and Key Skills fields');

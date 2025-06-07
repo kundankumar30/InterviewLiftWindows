@@ -35,7 +35,17 @@ const safetySettings = [
 ];
 
 // Generate streaming text-based response with conversation history support
-async function generateTextResponse(jobRole, keySkills, context, onProgress, onComplete, onError) {
+async function generateTextResponse(jobRole, keySkills, context, chatHistory, onProgress, onComplete, onError, abortSignal = null) {
+    let isCancelled = false;
+    
+    // Set up cancellation handler
+    if (abortSignal) {
+        abortSignal.addEventListener('abort', () => {
+            isCancelled = true;
+            console.log('🛑 Gemini request cancelled via abort signal');
+        });
+    }
+    
     try {
         // Record when Gemini API call starts
         const geminiApiCallTime = Date.now();
@@ -52,13 +62,41 @@ async function generateTextResponse(jobRole, keySkills, context, onProgress, onC
         
         console.log('🗣️ Clean Question:', questionText);
         console.log('🗣️ System Prompt Length:', systemPrompt.length, 'characters');
+        console.log('📚 Conversation History Length:', chatHistory ? chatHistory.length : 0, 'turns');
 
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-        const result = await model.generateContentStream([
-            { text: systemPrompt },
-            { text: questionText }
-        ]);
+        // Build the conversation context with system prompt, history, and current question
+        const conversationParts = [
+            { text: systemPrompt }
+        ];
+        
+        // Add conversation history if available
+        if (chatHistory && chatHistory.length > 0) {
+            console.log('📚 Adding conversation history to Gemini call...');
+            // Convert conversation history to Gemini content format
+            for (const turn of chatHistory) {
+                if (turn.parts && turn.parts[0] && turn.parts[0].text) {
+                    conversationParts.push({ text: turn.parts[0].text });
+                }
+            }
+            console.log('📚 Total conversation parts after history:', conversationParts.length);
+        }
+        
+        // Add current question
+        conversationParts.push({ text: questionText });
+
+        console.log('📋 Final conversation context has', conversationParts.length, 'parts');
+        console.log('📋 Conversation parts preview:');
+        conversationParts.forEach((part, index) => {
+            if (part.text) {
+                console.log(`  Part ${index}: ${part.text.substring(0, 100)}${part.text.length > 100 ? '...' : ''}`);
+            } else if (part.parts) {
+                console.log(`  Part ${index}: [conversation turn with ${part.parts.length} parts]`);
+            }
+        });
+
+        const result = await model.generateContentStream(conversationParts);
 
         let streamedText = '';
         let isFirstChunk = true;
@@ -67,6 +105,12 @@ async function generateTextResponse(jobRole, keySkills, context, onProgress, onC
         let chunkCount = 0;
         
         for await (const chunk of result.stream) {
+            // Check for cancellation before processing each chunk
+            if (isCancelled) {
+                console.log('🛑 Gemini streaming cancelled - stopping chunk processing');
+                return;
+            }
+            
             const chunkText = chunk.text();
             streamedText += chunkText;
             chunkCount++;
@@ -91,7 +135,11 @@ async function generateTextResponse(jobRole, keySkills, context, onProgress, onC
             }
             
             console.log(`📦 Chunk ${chunkCount}:`, chunkText.length > 50 ? chunkText.substring(0,50) + "..." : chunkText);
-            onProgress(chunkText, isFirstChunk);
+            
+            // Check for cancellation before calling onProgress
+            if (!isCancelled) {
+                onProgress(chunkText, isFirstChunk);
+            }
             isFirstChunk = false;
         }
         
@@ -105,7 +153,10 @@ async function generateTextResponse(jobRole, keySkills, context, onProgress, onC
         console.log('🚀===== GEMINI CHAT CALL END =====');
         console.log('');
         
-        onComplete(streamedText, questionText);
+        // Only call onComplete if not cancelled
+        if (!isCancelled) {
+            onComplete(streamedText, questionText);
+        }
 
     } catch (error) {
         console.log('🚨===== GEMINI CHAT ERROR =====');

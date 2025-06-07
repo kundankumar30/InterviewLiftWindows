@@ -26,7 +26,7 @@ function initializeOpenAI() {
 }
 
 // Generate text-based response with conversation history support
-async function generateTextResponse(jobRole, keySkills, context, onProgress, onComplete, onError) {
+async function generateTextResponse(jobRole, keySkills, context, chatHistory, onProgress, onComplete, onError) {
     if (!openai) {
         const error = new Error("OpenAI client not initialized. Please check API key configuration.");
         onError(error);
@@ -51,13 +51,47 @@ async function generateTextResponse(jobRole, keySkills, context, onProgress, onC
         
         console.log('🗣️ Clean Question:', questionText);
         console.log('🗣️ System Prompt Length:', systemPrompt.length, 'characters');
+        console.log('📚 Conversation History Length:', chatHistory ? chatHistory.length : 0, 'turns');
+
+        // Build the conversation messages with system prompt, history, and current question
+        const messages = [
+            { role: "system", content: systemPrompt }
+        ];
+        
+        // Add conversation history if available  
+        if (chatHistory && chatHistory.length > 0) {
+            console.log('📚 Adding conversation history to OpenAI call...');
+            for (const turn of chatHistory) {
+                if (turn.role === "user" && turn.parts && turn.parts[0]) {
+                    messages.push({
+                        role: "user", 
+                        content: turn.parts[0].text
+                    });
+                } else if (turn.role === "model" && turn.parts && turn.parts[0]) {
+                    messages.push({
+                        role: "assistant",
+                        content: turn.parts[0].text
+                    });
+                }
+            }
+            console.log('📚 Added', chatHistory.length, 'history turns to OpenAI call');
+        }
+        
+        // Add current user message
+        messages.push({
+            role: "user",
+            content: questionText
+        });
+
+        console.log('📋 Total messages in conversation:', messages.length);
+        console.log('📋 Message array preview:');
+        messages.forEach((msg, index) => {
+            console.log(`  Message ${index} (${msg.role}): ${msg.content.substring(0, 100)}${msg.content.length > 100 ? '...' : ''}`);
+        });
 
         const response = await openai.chat.completions.create({
             model: "gpt-4o-mini",
-            messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: questionText }
-            ],
+            messages: messages, // Use the full conversation history
             stream: true
         });
         
@@ -88,7 +122,7 @@ async function generateTextResponse(jobRole, keySkills, context, onProgress, onC
         console.log('🚀===== OPENAI TEXT CALL END =====');
         console.log('');
         
-        onComplete(streamedText);
+        onComplete(streamedText, questionText);
         
     } catch (error) {
         console.log('🚨===== OPENAI TEXT ERROR =====');

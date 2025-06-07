@@ -139,9 +139,78 @@ function getVADStatistics() {
 }
 
 
-async function startLiveTranscription() {
- console.log(`Starting live transcription on platform: ${platform}`);
+// Add comprehensive cleanup tracking
+const activeTimers = new Set();
+const activeProcesses = new Set();
+const activeBuffers = new Map();
 
+// Enhanced timer wrapper with automatic cleanup tracking
+function setTimeoutSafe(callback, delay, label = 'unnamed') {
+  const timerId = setTimeout(() => {
+    activeTimers.delete(timerId);
+    try {
+      callback();
+    } catch (error) {
+      console.error(`Timer callback error (${label}):`, error);
+    }
+  }, delay);
+  activeTimers.add(timerId);
+  console.log(`🔧 Timer created: ${label} (${activeTimers.size} active)`);
+  return timerId;
+}
+
+function clearTimeoutSafe(timerId, label = 'unnamed') {
+  if (timerId) {
+    clearTimeout(timerId);
+    activeTimers.delete(timerId);
+    console.log(`🧹 Timer cleared: ${label} (${activeTimers.size} remaining)`);
+  }
+}
+
+// Emergency cleanup function
+function emergencyMemoryCleanup() {
+  console.log(`🚨 EMERGENCY CLEANUP - ${activeTimers.size} timers, ${activeProcesses.size} processes`);
+  
+  // Clear all active timers
+  activeTimers.forEach(timerId => {
+    try {
+      clearTimeout(timerId);
+    } catch (e) {
+      console.warn('Failed to clear timer:', e);
+    }
+  });
+  activeTimers.clear();
+  
+  // Force kill all active processes
+  activeProcesses.forEach(process => {
+    try {
+      if (process && !process.killed) {
+        process.kill('SIGKILL');
+      }
+    } catch (e) {
+      console.warn('Failed to kill process:', e);
+    }
+  });
+  activeProcesses.clear();
+  
+  // Clear all buffers
+  activeBuffers.clear();
+  
+  // Reset all recording-related variables
+  currentParagraph = "";
+  paragraphLastUpdated = 0;
+  paragraphInProgress = false;
+  paragraphTimeoutId = null;
+  vadStats = { totalChunks: 0, voiceChunks: 0, discardedChunks: 0, apiCallsSaved: 0 };
+  
+  console.log('✅ Emergency cleanup completed');
+}
+
+async function startLiveTranscription() {
+ console.log("Starting live transcription...");
+
+ // Perform cleanup before starting
+ emergencyMemoryCleanup();
 
  const isPermissionGranted = await checkPermissions();
  if (!isPermissionGranted) {
@@ -151,7 +220,6 @@ async function startLiveTranscription() {
    return false;
  }
 
-
  // Check if recording is already in progress
  if (platform === "darwin" && swiftProcess) {
    console.log(
@@ -160,14 +228,12 @@ async function startLiveTranscription() {
    return false;
  }
 
-
  if (platform === "win32" && windowsRecorder && windowsRecorder.isActive()) {
    console.log(
      "Windows audio recorder already active, stop it first or wait."
    );
    return false;
  }
-
 
  // Validate platform-specific requirements
  if (platform === "darwin") {
@@ -193,7 +259,6 @@ async function startLiveTranscription() {
    return false;
  }
 
-
  // Check Google credentials
  if (!fs.existsSync(googleCredentialsPath)) {
    console.error(
@@ -207,7 +272,6 @@ async function startLiveTranscription() {
    return false;
  }
 
-
  // Initialize Voice Activity Detector
  if (!voiceActivityDetector) {
    console.log("Initializing Voice Activity Detector...");
@@ -219,7 +283,6 @@ async function startLiveTranscription() {
      silenceMinDuration: 300, // Minimum 500ms of silence to stop detection
    });
 
-
    // Reset VAD statistics
    vadStats = {
      totalChunks: 0,
@@ -228,29 +291,25 @@ async function startLiveTranscription() {
      apiCallsSaved: 0,
    };
 
-
    console.log(
      "✅ Voice Activity Detector ready - will filter non-voice audio"
    );
    console.log("🔧 Optimized for faster post-reset speech detection");
  }
 
-
- // Reset paragraph accumulation
+ // Reset paragraph accumulation with proper cleanup
  currentParagraph = "";
  paragraphLastUpdated = 0;
  paragraphInProgress = false;
  if (paragraphTimeoutId) {
-   clearTimeout(paragraphTimeoutId);
+   clearTimeoutSafe(paragraphTimeoutId, 'paragraph-cleanup');
    paragraphTimeoutId = null;
  }
-
 
  // Initialize Google Speech-to-Text transcriber
  if (!googleSpeechTranscriber) {
    console.log("Initializing Google Speech-to-Text transcriber...");
    isGoogleSTTModelReady = false;
-
 
    googleSpeechTranscriber = new GoogleSpeechTranscriber({
      sampleRateHertz: 16000,
@@ -266,11 +325,9 @@ async function startLiveTranscription() {
          return;
        }
 
-
        if (isGoogleSTTModelReady && data.text) {
          // Record STT received timestamp with specific type
          const sttReceivedTime = Date.now();
-
 
          if (data.is_final) {
            console.log(
@@ -294,7 +351,6 @@ async function startLiveTranscription() {
            );
          }
 
-
          if (
            global.mainWindow &&
            global.mainWindow.webContents &&
@@ -310,13 +366,11 @@ async function startLiveTranscription() {
              is_final: data.is_final,
            });
 
-
            global.mainWindow.webContents.send("transcription-update", {
              text: data.text,
              is_final: data.is_final,
            });
          }
-
 
          // Update paragraph with the transcription
          if (data.is_final && data.text.trim().length > 0) {
@@ -347,14 +401,12 @@ async function startLiveTranscription() {
    googleSpeechTranscriber.startStream();
  }
 
-
  // Start platform-specific audio capture
  if (platform === "darwin") {
    return await startMacOSRecording();
  } else if (platform === "win32") {
    return await startWindowsRecording();
  }
-
 
  return false;
 }
@@ -462,27 +514,9 @@ async function startMacOSRecording() {
                lastRestartTime = currentTime;
 
 
-               let restartMessage = "";
-               if (jsonData.code === "STREAM_FUNCTION_NOT_CALLED_TIMEOUT") {
-                 restartMessage = `Audio stream timeout due to silence. Auto-restarting... (${restartCounter}/${MAX_RESTART_ATTEMPTS})`;
-                 console.log("🔄 " + restartMessage);
-               } else if (
-                 jsonData.code === "NO_AUDIO_FRAMES_RECEIVED_TIMEOUT"
-               ) {
-                 restartMessage = `No audio frames received. Auto-restarting... (${restartCounter}/${MAX_RESTART_ATTEMPTS})`;
-                 console.log("🔄 " + restartMessage);
-               } else {
-                 restartMessage = `Swift stream was stopped. Auto-restarting... (${restartCounter}/${MAX_RESTART_ATTEMPTS})`;
-                 console.log("🔄 " + restartMessage);
-               }
-
-
-               // Log restart attempt - no UI notification to keep suggestions clean
-               console.log(`🔄 ${restartMessage}`);
-
-
+               console.log(`🔄 Auto-restarting... (${restartCounter}/${MAX_RESTART_ATTEMPTS})`);
                stopLiveTranscription(true); // Stop current state with full reset
-               setTimeout(() => startLiveTranscription(), 2000); // Attempt restart
+               setTimeoutSafe(() => startLiveTranscription(), 2000, 'auto-restart'); // Attempt restart
              } else {
                // Handle non-recoverable errors
                console.error(
@@ -556,6 +590,16 @@ async function startMacOSRecording() {
      }
    }
  });
+
+ if (swiftProcess) {
+   activeProcesses.add(swiftProcess);
+   
+   swiftProcess.on('exit', () => {
+     activeProcesses.delete(swiftProcess);
+     console.log(`🧹 Swift process removed from tracking (${activeProcesses.size} remaining)`);
+   });
+ }
+
  return true;
 }
 
@@ -694,6 +738,19 @@ async function startWindowsRecording() {
  });
 
 
+ // Track the recorder process
+ if (windowsRecorder.recorderProcess) {
+   activeProcesses.add(windowsRecorder.recorderProcess);
+   
+   windowsRecorder.recorderProcess.on('exit', () => {
+     if (windowsRecorder.recorderProcess) {
+       activeProcesses.delete(windowsRecorder.recorderProcess);
+       console.log(`🧹 Windows recorder process removed from tracking (${activeProcesses.size} remaining)`);
+     }
+   });
+ }
+
+
  const success = await windowsRecorder.startRecording();
  if (!success) {
    console.error("Failed to start Windows audio recording");
@@ -794,20 +851,30 @@ function stopWindowsScreenCapture() {
 function stopLiveTranscription(fullyResetTranscriber = false) {
  console.log(`Stopping live transcription on platform: ${platform}...`);
 
+ // Clear all active timers immediately
+ activeTimers.forEach(timerId => {
+   try {
+     clearTimeout(timerId);
+   } catch (e) {
+     console.warn('Failed to clear timer during stop:', e);
+   }
+ });
+ activeTimers.clear();
 
  // Stop platform-specific audio capture
  if (platform === "darwin") {
    if (swiftProcess && !swiftProcess.killed) {
      try {
+       activeProcesses.delete(swiftProcess);
        swiftProcess.kill("SIGINT");
        console.log("Sent SIGINT to Swift process.");
        // Wait briefly for process to terminate
-       setTimeout(() => {
+       setTimeoutSafe(() => {
          if (swiftProcess && !swiftProcess.killed) {
            swiftProcess.kill("SIGKILL"); // Force kill if SIGINT fails
            console.warn("Forcefully terminated Swift process with SIGKILL.");
          }
-       }, 1000);
+       }, 1000, 'swift-force-kill');
      } catch (err) {
        console.error("Error killing Swift process:", err);
      }
@@ -816,6 +883,9 @@ function stopLiveTranscription(fullyResetTranscriber = false) {
  } else if (platform === "win32") {
    if (windowsRecorder && windowsRecorder.isActive()) {
      try {
+       if (windowsRecorder.recorderProcess) {
+         activeProcesses.delete(windowsRecorder.recorderProcess);
+       }
        windowsRecorder.stopRecording();
        console.log("Stopped Windows audio recorder.");
      } catch (err) {
@@ -825,7 +895,6 @@ function stopLiveTranscription(fullyResetTranscriber = false) {
    stopWindowsScreenCapture();
    windowsRecorder = null; // Ensure recorder is cleared
  }
-
 
  if (fullyResetTranscriber) {
    if (googleSpeechTranscriber) {
@@ -838,7 +907,6 @@ function stopLiveTranscription(fullyResetTranscriber = false) {
      googleSpeechTranscriber = null;
      isGoogleSTTModelReady = false;
    }
-
 
    if (voiceActivityDetector) {
      console.log("Resetting Voice Activity Detector.");
@@ -857,7 +925,6 @@ function stopLiveTranscription(fullyResetTranscriber = false) {
    }
  }
 
-
  if (
    global.mainWindow &&
    global.mainWindow.webContents &&
@@ -870,15 +937,19 @@ function stopLiveTranscription(fullyResetTranscriber = false) {
    );
  }
 
-
- // Reset paragraph accumulation
+ // Reset paragraph accumulation with proper cleanup
  currentParagraph = "";
  paragraphLastUpdated = 0;
  paragraphInProgress = false;
  if (paragraphTimeoutId) {
-   clearTimeout(paragraphTimeoutId);
+   clearTimeoutSafe(paragraphTimeoutId, 'paragraph-cleanup');
    paragraphTimeoutId = null;
  }
+
+ // Clear all buffers
+ activeBuffers.clear();
+  
+ console.log(`✅ Transcription stopped - ${activeTimers.size} timers, ${activeProcesses.size} processes remaining`);
 }
 
 
@@ -918,6 +989,10 @@ async function resetFullTranscriptionService() {
  console.log("Executing full transcription service reset.");
 
 
+ // Emergency cleanup before reset
+ emergencyMemoryCleanup();
+
+
  // Reset restart counter on manual reset
  restartCounter = 0;
  console.log("🔄 Manual reset triggered - restart counter reset");
@@ -946,7 +1021,7 @@ async function resetFullTranscriptionService() {
 
 
  // Reduced delay for faster reset - 50ms is sufficient for cleanup
- await new Promise((resolve) => setTimeout(resolve, 50));
+ await new Promise((resolve) => setTimeoutSafe(resolve, 50, 'reset-delay'));
 
 
  const success = await startLiveTranscription();
@@ -964,7 +1039,7 @@ async function resetFullTranscriptionService() {
  paragraphLastUpdated = 0;
  paragraphInProgress = false;
  if (paragraphTimeoutId) {
-   clearTimeout(paragraphTimeoutId);
+   clearTimeoutSafe(paragraphTimeoutId, 'reset-paragraph-cleanup');
    paragraphTimeoutId = null;
  }
 
@@ -987,7 +1062,7 @@ function clearConversationHistory() {
  lastResponseId = 0;
  lastAICallText = null; // Reset similarity tracking
  if (paragraphTimeoutId) {
-   clearTimeout(paragraphTimeoutId);
+   clearTimeoutSafe(paragraphTimeoutId, 'conversation-cleanup');
    paragraphTimeoutId = null;
  }
 }
@@ -997,7 +1072,7 @@ function clearConversationHistory() {
 function updateParagraph(text) {
  // Reset any existing timeout
  if (paragraphTimeoutId) {
-   clearTimeout(paragraphTimeoutId);
+   clearTimeoutSafe(paragraphTimeoutId, 'paragraph-cleanup');
    paragraphTimeoutId = null;
  }
 
@@ -1047,34 +1122,8 @@ function updateParagraph(text) {
    );
 
 
-   // Check similarity with last AI call to prevent repetitive responses (<85% similar)
-   if (lastAICallText) {
-     const similarity = calculateSimilarity(
-       currentParagraph.trim(),
-       lastAICallText
-     );
-     const isUnderSimilarityThreshold = similarity < 0.85;
-
-
-     console.log(
-       `   Similarity: ${(similarity * 100).toFixed(
-         1
-       )}% (threshold: <85%: ${isUnderSimilarityThreshold})`
-     );
-
-
-     if (!isUnderSimilarityThreshold) {
-       console.log(
-         `🔄 Skipping AI call - content too similar (${(
-           similarity * 100
-         ).toFixed(1)}% >= 85%)`
-       );
-       // Reset paragraph without sending to AI
-       paragraphInProgress = false;
-       currentParagraph = "";
-       return;
-     }
-   }
+   // REMOVED: Similarity check to allow repeated questions
+   // Users should be able to ask the same question multiple times
 
 
    console.log(`✅ All conditions met - sending to AI: "${currentParagraph}"`);
@@ -1103,7 +1152,7 @@ function updateParagraph(text) {
    );
 
 
-   paragraphTimeoutId = setTimeout(() => {
+   paragraphTimeoutId = setTimeoutSafe(() => {
      const finalTextLength = currentParagraph.trim().length;
      const hasTimeoutMinimum = finalTextLength >= 25;
 
@@ -1119,33 +1168,7 @@ function updateParagraph(text) {
        );
 
 
-       // Check similarity before sending
-       if (lastAICallText) {
-         const similarity = calculateSimilarity(
-           currentParagraph.trim(),
-           lastAICallText
-         );
-         const isUnderSimilarityThreshold = similarity < 0.85;
-
-
-         console.log(
-           `   Timeout similarity: ${(similarity * 100).toFixed(
-             1
-           )}% (threshold: <85%: ${isUnderSimilarityThreshold})`
-         );
-
-
-         if (!isUnderSimilarityThreshold) {
-           console.log(
-             `🔄 Timeout paragraph skipped - too similar (${(
-               similarity * 100
-             ).toFixed(1)}% >= 85%)`
-           );
-           paragraphInProgress = false;
-           currentParagraph = "";
-           return;
-         }
-       }
+       // REMOVED: Timeout similarity check to allow repeated questions
 
 
        console.log(
@@ -1163,7 +1186,7 @@ function updateParagraph(text) {
      paragraphInProgress = false;
      currentParagraph = "";
      paragraphTimeoutId = null;
-   }, timeoutDuration);
+   }, timeoutDuration, 'paragraph-timeout');
  }
 }
 
@@ -1361,6 +1384,11 @@ async function sendToGemini(text) {
            };
 
 
+           // High-precision timing for IPC send
+           const ipcSendTime = Date.now();
+           console.log(`⏱️ IPC SEND TIME (first chunk): ${new Date(ipcSendTime).toISOString()}`);
+           console.log(`⏱️ IPC SEND DELAY from AI chunk: ${ipcSendTime - firstChunkTime}ms`);
+           
            global.mainWindow.webContents.send("suggestion-update", {
              title: "",
              content: chunkText,
@@ -1368,11 +1396,18 @@ async function sendToGemini(text) {
              isFirstChunk: true,
              responseId: responseId,
            });
+           
+           console.log(`⏱️ IPC SEND COMPLETED (first chunk) at: ${Date.now()}`);
+           console.log(`⏱️ IPC SEND DURATION: ${Date.now() - ipcSendTime}ms`);
          } else {
            // For subsequent chunks, append to the accumulated response
            if (lastAIResponse && lastAIResponse.responseId === responseId) {
              lastAIResponse.content += chunkText;
 
+             // High-precision timing for subsequent chunk IPC send
+             const subsequentIpcSendTime = Date.now();
+             console.log(`⏱️ IPC SEND TIME (chunk): ${new Date(subsequentIpcSendTime).toISOString()}`);
+             console.log(`⏱️ Chunk length: ${chunkText.length} chars`);
 
              global.mainWindow.webContents.send("suggestion-update", {
                content: chunkText,
@@ -1380,6 +1415,9 @@ async function sendToGemini(text) {
                isFirstChunk: false,
                responseId: responseId,
              });
+             
+             console.log(`⏱️ IPC SEND COMPLETED (chunk) at: ${Date.now()}`);
+             console.log(`⏱️ IPC SEND DURATION: ${Date.now() - subsequentIpcSendTime}ms`);
            }
          }
        }
@@ -1473,6 +1511,22 @@ async function sendToGemini(text) {
        }
        // Log error only - no UI notification to keep suggestions clean
        console.error("AI Service Error:", errorMessage);
+       
+       // CRITICAL FIX: Send completion signal even on error to reset AI call tracking
+       // This prevents subsequent identical questions from being blocked
+       if (
+         global.mainWindow &&
+         global.mainWindow.webContents &&
+         !global.mainWindow.isDestroyed()
+       ) {
+         console.log('🔄 AI error occurred - sending completion signal to reset call tracking');
+         global.mainWindow.webContents.send("suggestion-update", {
+           isStreaming: true,
+           isComplete: true,
+           responseId: responseId,
+           error: true // Optional flag to indicate this was an error completion
+         });
+       }
      }
    );
  } catch (error) {
@@ -1481,6 +1535,7 @@ async function sendToGemini(text) {
 }
 
 
+// Export cleanup functions for main process
 module.exports = {
  startLiveTranscription,
  stopLiveTranscription,
@@ -1489,4 +1544,8 @@ module.exports = {
  getGeminiModel: getGeminiModel, // Export a function to get the model
  getVADStatistics: getVADStatistics, // Export VAD statistics function
  sendToGemini: sendToGemini,
+ emergencyMemoryCleanup,
+ activeTimers,
+ activeProcesses,
+ activeBuffers
 };

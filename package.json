@@ -69,7 +69,8 @@
     "openai": "^4.26.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "shelljs": "^0.8.5"
+    "shelljs": "^0.8.5",
+    "sudo-prompt": "^9.2.1"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.5.0",

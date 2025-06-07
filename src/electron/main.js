@@ -62,11 +62,114 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 const { checkPermissions } = require("./utils/permission");
-const { startLiveTranscription, stopLiveTranscription, resetFullTranscriptionService, clearConversationHistory, getGeminiModel } = require("./utils/recording");
+const { startLiveTranscription, stopLiveTranscription, resetFullTranscriptionService, clearConversationHistory, getGeminiModel, emergencyMemoryCleanup } = require("./utils/recording");
 const { raceScreenshotResponse } = require("./utils/ai_race");
 const https = require('https');
 
 let powerSaveBlockerId = null;
+
+// Add memory management tracking
+const activeIPCHandlers = new Set();
+const activeIntervals = new Set();
+const memoryCheckInterval = 60000; // Check every 60 seconds
+
+// Enhanced IPC handler wrapper with cleanup tracking
+function registerIPCHandler(channel, handler, isHandle = false) {
+  if (isHandle) {
+    ipcMain.handle(channel, handler);
+  } else {
+    ipcMain.on(channel, handler);
+  }
+  activeIPCHandlers.add(channel);
+  console.log(`📡 IPC handler registered: ${channel} (${activeIPCHandlers.size} total)`);
+}
+
+// Enhanced interval wrapper with cleanup tracking
+function setIntervalSafe(callback, delay, label = 'main-interval') {
+  const intervalId = setInterval(() => {
+    try {
+      callback();
+    } catch (error) {
+      console.error(`Interval callback error (${label}):`, error);
+    }
+  }, delay);
+  activeIntervals.add(intervalId);
+  console.log(`⏰ Interval created: ${label} (${activeIntervals.size} active)`);
+  return intervalId;
+}
+
+function clearIntervalSafe(intervalId, label = 'main-interval') {
+  if (intervalId) {
+    clearInterval(intervalId);
+    activeIntervals.delete(intervalId);
+    console.log(`🧹 Interval cleared: ${label} (${activeIntervals.size} remaining)`);
+  }
+}
+
+// Memory monitoring and cleanup functions
+function checkMemoryUsage() {
+  const memUsage = process.memoryUsage();
+  const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
+  const rssUsedMB = Math.round(memUsage.rss / 1024 / 1024);
+  
+  console.log(`💾 Memory: Heap ${heapUsedMB}MB, RSS ${rssUsedMB}MB`);
+  
+  // Trigger cleanup if memory usage is high
+  if (heapUsedMB > 300 || rssUsedMB > 400) {
+    console.log('🚨 HIGH MEMORY USAGE DETECTED - Triggering cleanup');
+    performMainProcessCleanup();
+  }
+  
+  return { heapUsedMB, rssUsedMB };
+}
+
+function performMainProcessCleanup() {
+  console.log('🧹 Performing main process memory cleanup');
+  
+  // Trigger recording cleanup
+  try {
+    emergencyMemoryCleanup();
+  } catch (error) {
+    console.warn('Error in recording cleanup:', error);
+  }
+  
+  // Force garbage collection if available
+  if (global.gc) {
+    console.log('🗑️ Forcing garbage collection');
+    global.gc();
+  }
+  
+  // Clear conversation history to free memory
+  try {
+    clearConversationHistory();
+  } catch (error) {
+    console.warn('Error clearing conversation history:', error);
+  }
+  
+  console.log('✅ Main process cleanup completed');
+}
+
+function emergencyMainProcessCleanup() {
+  console.log('🚨 EMERGENCY MAIN PROCESS CLEANUP');
+  
+  // Clear all intervals
+  activeIntervals.forEach(intervalId => {
+    try {
+      clearInterval(intervalId);
+    } catch (e) {
+      console.warn('Failed to clear interval:', e);
+    }
+  });
+  activeIntervals.clear();
+  
+  // Perform standard cleanup
+  performMainProcessCleanup();
+  
+  console.log('✅ Emergency main process cleanup completed');
+}
+
+// Start memory monitoring
+const memoryMonitorInterval = setIntervalSafe(checkMemoryUsage, memoryCheckInterval, 'memory-monitor');
 
 // Function to exchange authorization code for tokens
 async function exchangeCodeForTokens(authCode) {
@@ -595,132 +698,123 @@ function transitionToOverlayMode() {
 }
 
 // Handle navigation between screens
-ipcMain.on("navigate", (event, screen) => {
-  switch(screen) {
-    case "welcome":
-      // Transition to welcome mode first
-      transitionToWelcomeMode();
-      // Then load the welcome screen
-      global.mainWindow.loadFile("./src/electron/screens/welcome/welcome-screen.html");
-      break;
-    case "overlay":
-      // Transition to overlay mode first
-      transitionToOverlayMode();
-      // Then check permissions and load overlay
-      checkPermissionsAndLoadOverlay();
-      break;
+registerIPCHandler("navigate", async (event, screen) => {
+  console.log(`Navigating to screen: ${screen}`);
+  
+  if (global.mainWindow && global.mainWindow.webContents && !global.mainWindow.isDestroyed()) {
+    if (screen === "recording") {
+      global.mainWindow.loadFile(path.join(__dirname, "screens", "recording", "recording.html"));
+    } else if (screen === "overlay") {
+      // Use the same proper overlay setup as skip-login method
+      console.log('🔄 Setting up overlay mode via navigation...');
+      await transitionToOverlayMode();
+      await checkPermissionsAndLoadOverlay();
+    } else if (screen === "home") {
+      global.mainWindow.loadFile(path.join(__dirname, "screens", "home", "home.html"));
+    }
   }
 });
 
 // Handle Clerk authentication success from renderer
-ipcMain.on("clerk-auth-success", async (event, authData) => {
-  console.log('✅ Clerk authentication successful:', authData.user.email);
+registerIPCHandler("clerk-auth-success", async (event, authData) => {
+  console.log("Clerk authentication successful:", authData);
   
-  // Store user data globally
   global.currentUser = authData.user;
-  global.authToken = authData.sessionId;
   
-  // NEW: Perform user validation before redirecting to welcome screen
-  console.log('🔍 Performing user validation before welcome screen...');
-  try {
-    const userValidation = require('./utils/user-validation');
-    const validationResult = await userValidation.performUserValidation(authData.user);
-    console.log('✅ User validation completed:', {
-      success: validationResult.success,
-      userType: validationResult.userType,
-      accessLevel: validationResult.accessLevel
+  // Store authentication data for the session
+  global.authData = authData;
+  
+  // Validate the user with your backend
+  const validationResult = await userValidation.performUserValidation(authData.user);
+  console.log("User validation result:", validationResult);
+  
+  if (validationResult.success) {
+    console.log("User validated successfully. Allowing access to protected features.");
+    
+    // Set user as authenticated
+    global.isUserAuthenticated = true;
+    
+    // Send success response
+    event.reply("auth-validation-success", {
+      user: authData.user,
+      validation: validationResult
     });
+  } else {
+    console.log("User validation failed:", validationResult.error);
     
-    // Store validation result with user data
-    global.currentUser.validation = validationResult;
-    
-  } catch (validationError) {
-    console.error('❌ User validation failed:', validationError);
-    // Continue with fallback access - don't block user
-    global.currentUser.validation = {
-      success: false,
-      error: validationError.message,
-      userType: 'basic',
-      accessLevel: 'limited'
-    };
-  }
-  
-  // Navigate to welcome screen
-  if (global.mainWindow) {
-    transitionToWelcomeMode();
-    global.mainWindow.loadFile("./src/electron/screens/welcome/welcome-screen.html");
-    console.log('Navigated to welcome screen after Clerk authentication and validation.');
+    // Send error response
+    event.reply("auth-validation-error", {
+      error: validationResult.error,
+      details: validationResult.details
+    });
   }
 });
 
 // Handle Clerk logout
-ipcMain.on("clerk-auth-logout", async (event) => {
-  console.log('👋 User logged out via Clerk');
+registerIPCHandler("clerk-auth-logout", async (event) => {
+  console.log("User logging out...");
   
-  // Clear global user data
+  // Clear user data
   global.currentUser = null;
-  global.authToken = null;
+  global.authData = null;
+  global.isUserAuthenticated = false;
   
-  // Navigate back to Next.js sign-in page in Electron window
-  if (global.mainWindow) {
-    console.log('🌐 Loading Next.js sign-in page in Electron window after logout...');
-    const signInUrl = 'http://localhost:3001/sign-in?redirect_to_app=true';
-    try {
-      await global.mainWindow.loadURL(signInUrl);
-      console.log('✅ Loaded sign-in page in Electron window after logout.');
-    } catch (error) {
-      console.error('❌ Failed to load sign-in page after logout:', error);
-    }
+  // Perform any cleanup needed for logout
+  try {
+    // Stop any active recording/transcription
+    stopLiveTranscription();
+    
+    // Clear conversation history
+    clearConversationHistory();
+    
+    // Perform memory cleanup
+    performMainProcessCleanup();
+  } catch (error) {
+    console.error("Error during logout cleanup:", error);
   }
+  
+  console.log("User logged out successfully.");
+  
+  // Send logout success response
+  event.reply("clerk-logout-success");
 });
 
-// Handle direct Clerk token requests
-ipcMain.handle('clerk-get-token', async (event) => {
+// Handle requests with tracked handlers
+registerIPCHandler('clerk-get-token', async (event) => {
   try {
-    const clerkService = require('./utils/clerk-service');
-    const token = await clerkService.getAuthToken();
-    if (!token) {
-      throw new Error('No Clerk token available');
+    if (global.authData && global.authData.session) {
+      const token = await global.authData.session.getToken();
+      return { success: true, token };
+    } else {
+      return { success: false, error: 'No active session' };
     }
-    console.log('✅ Successfully retrieved Clerk token:', token);
-    return { success: true, token };
   } catch (error) {
-    console.error('Failed to get Clerk token:', error);
+    console.error('Error getting Clerk token:', error);
     return { success: false, error: error.message };
   }
-});
+}, true);
 
-// Handle getting current user data for welcome screen
-ipcMain.handle('clerk-get-current-user', async (event) => {
+registerIPCHandler('clerk-get-current-user', async (event) => {
   try {
-    console.log('📊 [MAIN] Getting current user data...');
-    
     if (global.currentUser) {
-      console.log('✅ [MAIN] Current user data found:', {
-        email: global.currentUser.email,
-        hasValidation: !!global.currentUser.validation,
-        userType: global.currentUser.validation?.userType || 'unknown'
-      });
-      
-      return {
-        success: true,
-        user: global.currentUser
+      return { 
+        success: true, 
+        user: {
+          id: global.currentUser.id,
+          emailAddresses: global.currentUser.emailAddresses,
+          firstName: global.currentUser.firstName,
+          lastName: global.currentUser.lastName,
+          imageUrl: global.currentUser.imageUrl
+        }
       };
     } else {
-      console.log('⚠️ [MAIN] No current user data found');
-      return {
-        success: false,
-        error: 'No user data available'
-      };
+      return { success: false, error: 'No authenticated user' };
     }
   } catch (error) {
-    console.error('❌ [MAIN] Error getting current user:', error);
-    return {
-      success: false,
-      error: error.message || 'Failed to get user data'
-    };
+    console.error('Error getting current user:', error);
+    return { success: false, error: error.message };
   }
-});
+}, true);
 
 // Handle email sign-in
 ipcMain.handle('clerk-email-signin', async (event, { email, password }) => {
@@ -1163,11 +1257,17 @@ async function checkPermissionsAndLoadOverlay() {
             
             document.head.appendChild(protectionStyle);
             
-            // Additional runtime protection
-            Object.defineProperty(document, 'hidden', {
-              get: () => false,
-              configurable: false
-            });
+            // Additional runtime protection - only define if not already defined
+            try {
+              if (!document.hasOwnProperty('hidden') || Object.getOwnPropertyDescriptor(document, 'hidden').configurable !== false) {
+                Object.defineProperty(document, 'hidden', {
+                  get: () => false,
+                  configurable: false
+                });
+              }
+            } catch (e) {
+              console.log('🛡️ Property already protected:', e.message);
+            }
             
             // Prevent developer tools (additional layer)
             document.addEventListener('keydown', function(e) {
@@ -1189,9 +1289,15 @@ async function checkPermissionsAndLoadOverlay() {
           // Apply protection immediately
           applyEnhancedContentProtection();
           
-          // Re-apply protection after any dynamic content loads
+          // Throttled re-application of protection to avoid performance issues during streaming
+          let protectionThrottle = null;
           const observer = new MutationObserver(() => {
-            applyEnhancedContentProtection();
+            if (protectionThrottle) return; // Skip if already scheduled
+            
+            protectionThrottle = setTimeout(() => {
+              applyEnhancedContentProtection();
+              protectionThrottle = null;
+            }, 500); // Only re-apply every 500ms max
           });
           
           observer.observe(document.body, {
@@ -1273,15 +1379,35 @@ async function checkPermissionsAndLoadOverlay() {
     });
   } else {
     console.log('❌ Permission denied for overlay');
-    const response = await dialog.showMessageBox(global.mainWindow, {
-      type: "warning",
-      title: "Permission Denied",
-      message: "You need to grant permission for screen recording. Would you like to open System Preferences now?",
-      buttons: ["Open System Preferences", "Cancel"],
-    });
+    
+    // Platform-specific permission handling
+    if (process.platform === 'win32') {
+      const response = await dialog.showMessageBox(global.mainWindow, {
+        type: "warning",
+        title: "Permission Required",
+        message: "Interview Lift needs administrator privileges to capture system audio. Would you like to restart with admin privileges?",
+        buttons: ["Restart as Admin", "Open Settings", "Cancel"],
+      });
 
-    if (response.response === 0) {
-      shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture");
+      if (response.response === 0) {
+        // Restart as admin
+        await restartAsAdmin();
+      } else if (response.response === 1) {
+        // Open Windows settings
+        const { openPermissionSettings } = require('./utils/permission');
+        await openPermissionSettings('privacy');
+      }
+    } else if (process.platform === 'darwin') {
+      const response = await dialog.showMessageBox(global.mainWindow, {
+        type: "warning",
+        title: "Permission Denied",
+        message: "You need to grant permission for screen recording. Would you like to open System Preferences now?",
+        buttons: ["Open System Preferences", "Cancel"],
+      });
+
+      if (response.response === 0) {
+        shell.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture");
+      }
     }
   }
 }
@@ -1387,6 +1513,28 @@ ipcMain.handle("get-content-protection-status", async () => {
   }
 });
 
+// Handle style configuration request for overlay
+ipcMain.handle("get-style-config", async () => {
+  try {
+    const OverlayStyleManager = require('./utils/overlay-style-manager');
+    const styleManager = new OverlayStyleManager();
+    
+    const config = {
+      fontSize: styleManager.fontSize,
+      fontFamily: styleManager.fontFamily,
+      glassEffects: styleManager.glassEffects,
+      codeTheme: styleManager.codeTheme,
+      currentTheme: styleManager.currentTheme
+    };
+    
+    console.log('🎨 Providing style configuration to renderer:', config);
+    return config;
+  } catch (error) {
+    console.error('❌ Error getting style configuration:', error);
+    return null;
+  }
+});
+
 ipcMain.on("open-folder-dialog", async (event) => {
   const desktopPath = path.join(os.homedir(), "Desktop");
 
@@ -1403,7 +1551,8 @@ ipcMain.on("open-folder-dialog", async (event) => {
   }
 });
 
-ipcMain.on("start-recording", async (_, args) => {
+// Replace recording-related handlers
+registerIPCHandler("start-recording", async (_, args) => {
   const success = await startLiveTranscription();
   if (success) {
     if (powerSaveBlockerId === null || !powerSaveBlocker.isStarted(powerSaveBlockerId)) {
@@ -1412,12 +1561,12 @@ ipcMain.on("start-recording", async (_, args) => {
     }
   } else {
     if (global.mainWindow && global.mainWindow.webContents && !global.mainWindow.isDestroyed()) {
-    global.mainWindow.webContents.send("recording-status", "LIVE_TRANSCRIPTION_FAILED_TO_START");
+      global.mainWindow.webContents.send("recording-status", "LIVE_TRANSCRIPTION_FAILED_TO_START");
     }
   }
 });
 
-ipcMain.on("stop-recording", () => {
+registerIPCHandler("stop-recording", () => {
   stopLiveTranscription();
   if (powerSaveBlockerId !== null && powerSaveBlocker.isStarted(powerSaveBlockerId)) {
     powerSaveBlocker.stop(powerSaveBlockerId);
@@ -1426,8 +1575,8 @@ ipcMain.on("stop-recording", () => {
   }
 });
 
-// Handle STT reset request
-ipcMain.on("reset-stt", async () => {
+// Replace recording-related handlers
+registerIPCHandler("reset-stt", async () => {
   console.log("Received reset-stt request. Restarting live transcription fully.");
   const success = await resetFullTranscriptionService();
   if (!success) {
@@ -1438,8 +1587,8 @@ ipcMain.on("reset-stt", async () => {
   }
 });
 
-// Handle conversation history clear request
-ipcMain.on("clear-conversation-history", () => {
+// Replace recording-related handlers
+registerIPCHandler("clear-conversation-history", () => {
   console.log("Received clear-conversation-history request.");
   clearConversationHistory();
   console.log("✅ Conversation history cleared successfully.");
@@ -1617,14 +1766,26 @@ ipcMain.handle('take-screenshot', async (event) => {
 });
 // --- END: Screenshot IPC Handler ---
 
+// Enhanced app quit handler with cleanup
 app.on('will-quit', () => {
-  if (powerSaveBlockerId !== null && powerSaveBlocker.isStarted(powerSaveBlockerId)) {
-    powerSaveBlocker.stop(powerSaveBlockerId);
-    console.log(`Power save blocker stopped during app quit, ID: ${powerSaveBlockerId}`);
-  }
-  // Unregister global shortcuts when app is quitting
-  if (app.isReady()) {
-    globalShortcut.unregisterAll();
+  console.log('🛑 App is about to quit - performing cleanup');
+  
+  // Emergency cleanup before quit
+  emergencyMainProcessCleanup();
+  
+  // Clear memory monitor
+  clearIntervalSafe(memoryMonitorInterval, 'memory-monitor');
+  
+  // Unregister global shortcuts
+  globalShortcut.unregisterAll();
+  console.log('✅ App cleanup completed');
+});
+
+// Add window hidden event cleanup
+app.on('browser-window-blur', () => {
+  // Perform light cleanup when window loses focus
+  if (global.gc) {
+    global.gc();
   }
 });
 
@@ -1694,6 +1855,13 @@ app.whenReady().then(() => {
                   handleAuthCallback(deeplinkingUrl);
                   deeplinkingUrl = null; // Clear after processing
               }
+
+              // Make console clickable
+              global.mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+                  // Create clickable console message
+                  const clickableMessage = `[${new Date().toISOString()}] ${message}`;
+                  console.log(clickableMessage);
+              });
           });
       }
   });
@@ -1781,6 +1949,46 @@ const { initializeGemini } = require('./utils/gemini_service');
 const { initializeOpenAI } = require('./utils/openai_service');
 const { initializeCerebras } = require('./utils/cerebras_service');
 
+// Import sudo-prompt for admin elevation
+const sudo = require('sudo-prompt');
+
+// Function to restart the app as administrator
+async function restartAsAdmin() {
+  try {
+    console.log('🔄 Attempting to restart as administrator...');
+    
+    // Get the current executable path
+    const appPath = process.execPath;
+    const args = process.argv.slice(1).join(' ');
+    
+    // Create the command to restart the app
+    const command = `"${appPath}" ${args}`;
+    
+    const options = {
+      name: 'Interview Lift',
+      icns: path.join(__dirname, '../../assets/icon.icns'), // Optional: app icon
+    };
+
+    // Use sudo-prompt to restart with elevation
+    sudo.exec(command, options, (error, stdout, stderr) => {
+      if (error) {
+        console.error('❌ Failed to restart as admin:', error);
+        dialog.showErrorBox('Admin Restart Failed', 
+          'Could not restart with administrator privileges. Please manually run the app as administrator.');
+        return;
+      }
+      
+      console.log('✅ Successfully restarted as admin, closing current instance...');
+      // Close the current app instance
+      app.quit();
+    });
+
+  } catch (error) {
+    console.error('❌ Error during admin restart:', error);
+    dialog.showErrorBox('Restart Error', 'An error occurred while trying to restart as administrator.');
+  }
+}
+
 async function initializeAIServices() {
     console.log('Initializing AI services...');
     
@@ -1865,12 +2073,5 @@ ipcMain.handle('skip-login', async (event, data) => {
     console.error('❌ Skip login failed:', error);
     return { success: false, error: error.message };
   }
-});
-
-// Make console clickable
-global.mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
-  // Create clickable console message
-  const clickableMessage = `[${new Date().toISOString()}] ${message}`;
-  console.log(clickableMessage);
 });
 

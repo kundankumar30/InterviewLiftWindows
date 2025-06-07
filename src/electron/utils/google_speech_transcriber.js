@@ -35,9 +35,92 @@ class GoogleSpeechTranscriber {
        this.STREAMING_LIMIT = 7200000; // 2 hours
        this.encoding = 'LINEAR16';
        this.projectId = null;
-       this.hasLoggedFormat = false; // Add this line
+       this.hasLoggedFormat = false;
+       
+       // Add memory management tracking
+       this.activeTimers = new Set();
+       this.audioBufferLimit = 1000; // Limit audio buffer size
+       this.cleanupInterval = null;
+       
+       // Start periodic cleanup
+       this.startPeriodicCleanup();
    }
 
+   // Enhanced timer wrapper with cleanup tracking
+   setTimeoutSafe(callback, delay, label = 'transcriber-timer') {
+       const timerId = setTimeout(() => {
+           this.activeTimers.delete(timerId);
+           try {
+               callback();
+           } catch (error) {
+               console.error(`Transcriber timer callback error (${label}):`, error);
+           }
+       }, delay);
+       this.activeTimers.add(timerId);
+       return timerId;
+   }
+
+   clearTimeoutSafe(timerId) {
+       if (timerId) {
+           clearTimeout(timerId);
+           this.activeTimers.delete(timerId);
+       }
+   }
+
+   // Periodic cleanup to prevent memory accumulation
+   startPeriodicCleanup() {
+       this.cleanupInterval = setInterval(() => {
+           this.performMemoryCleanup();
+       }, 30000); // Every 30 seconds
+   }
+
+   performMemoryCleanup() {
+       // Limit audio buffer size
+       if (this.audioInput.length > this.audioBufferLimit) {
+           console.log(`🧹 Trimming audio buffer from ${this.audioInput.length} to ${this.audioBufferLimit}`);
+           this.audioInput = this.audioInput.slice(-this.audioBufferLimit);
+       }
+       
+       if (this.lastAudioInput.length > this.audioBufferLimit) {
+           this.lastAudioInput = this.lastAudioInput.slice(-this.audioBufferLimit);
+       }
+
+       // Clear old timer references
+       const currentTime = Date.now();
+       console.log(`🧹 Google Speech cleanup: ${this.activeTimers.size} active timers, ${this.audioInput.length} audio chunks`);
+   }
+
+   // Enhanced cleanup function
+   emergencyCleanup() {
+       console.log('🚨 Google Speech emergency cleanup');
+       
+       // Clear all timers
+       this.activeTimers.forEach(timerId => {
+           try {
+               clearTimeout(timerId);
+           } catch (e) {
+               console.warn('Failed to clear transcriber timer:', e);
+           }
+       });
+       this.activeTimers.clear();
+       
+       // Clear periodic cleanup
+       if (this.cleanupInterval) {
+           clearInterval(this.cleanupInterval);
+           this.cleanupInterval = null;
+       }
+       
+       // Clear buffers
+       this.audioInput = [];
+       this.lastAudioInput = [];
+       
+       // Reset stream state
+       this.isReady = false;
+       this.isStarted = false;
+       this.hasLoggedFormat = false;
+       
+       console.log('✅ Google Speech emergency cleanup completed');
+   }
 
    // Centralized error handler
    handleError(type, message, error = null) {
@@ -100,7 +183,7 @@ class GoogleSpeechTranscriber {
        this.stopStream();
        this.audioInput = [];
        this.streamStartTime = Date.now();
-       this.hasLoggedFormat = false; // Add this line to reset the flag
+       this.hasLoggedFormat = false;
 
 
        const request = {
@@ -124,17 +207,18 @@ class GoogleSpeechTranscriber {
                    this.restartStream();
                } else {
                    this.handleError('STREAMING', `Streaming recognition error: ${err.message}`, err);
-                   setTimeout(() => this.restartStream(), 1000);
+                   this.setTimeoutSafe(() => this.restartStream(), 1000, 'error-restart');
                }
            })
            .on('data', this.speechCallback);
 
 
-       setTimeout(() => {
+       // Use safe timeout with cleanup tracking
+       this.setTimeoutSafe(() => {
            if (this.recognizeStream && !this.recognizeStream.destroyed) {
                this.restartStream();
            }
-       }, this.STREAMING_LIMIT);
+       }, this.STREAMING_LIMIT, 'stream-limit-restart');
    }
 
 
@@ -231,11 +315,25 @@ class GoogleSpeechTranscriber {
 
 
    stop() {
+       console.log('🛑 Stopping Google Speech Transcriber');
+       
+       // Emergency cleanup
+       this.emergencyCleanup();
+       
+       // Stop the current stream
        this.stopStream();
-       this.isStarted = this.isReady = false;
-       this.restartCounter = 0;
-       this.audioInput = [];
-       this.lastAudioInput = [];
+       
+       // Clear speech client
+       if (this.speechClient) {
+           try {
+               this.speechClient.close();
+           } catch (error) {
+               console.warn('Error closing speech client:', error);
+           }
+           this.speechClient = null;
+       }
+       
+       console.log('✅ Google Speech Transcriber stopped');
    }
 
 

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Interview Lift - Sign In</title>
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;900&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -12,98 +13,331 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #fafafa 0%, #ffffff 50%, #f8fafc 100%);
             min-height: 100vh;
+            padding: 0;
+            margin: 0;
+            position: relative;
+            overflow: hidden;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
         }
 
-        .login-container {
+        /* Background effects */
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: 
+                radial-gradient(ellipse at 20% 10%, rgba(59, 130, 246, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 20%, rgba(168, 85, 247, 0.12) 0%, transparent 50%),
+                radial-gradient(ellipse at 40% 70%, rgba(34, 197, 94, 0.1) 0%, transparent 50%);
+            animation: global-splash-float 25s ease-in-out infinite;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        @keyframes global-splash-float {
+            0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); }
+            25% { transform: translate(50px, -30px) rotate(90deg) scale(1.1); }
+            50% { transform: translate(-20px, 40px) rotate(180deg) scale(0.9); }
+            75% { transform: translate(30px, -20px) rotate(270deg) scale(1.05); }
+        }
+
+        /* Logo scroll animations */
+        @keyframes scroll-left {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-100%); }
+        }
+
+        @keyframes scroll-right {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(0); }
+        }
+
+        .animate-scroll-left {
+            animation: scroll-left 30s linear infinite;
+        }
+
+        .animate-scroll-right {
+            animation: scroll-right 30s linear infinite;
+        }
+
+        .main-container {
+            width: 100vw;
+            height: 100vh;
+            margin: 0;
+            display: flex;
             background: white;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+            border-radius: 0;
             overflow: hidden;
-            width: 100%;
-            max-width: 1000px;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            min-height: 600px;
+            box-shadow: none;
         }
 
-        .login-form {
-            padding: 48px;
+        /* Left side - Company Logos */
+        .logos-section {
+            flex: 1;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f1f5f9 100%);
+            position: relative;
+            padding: clamp(40px, 6vh, 80px) clamp(30px, 4vw, 60px);
             display: flex;
             flex-direction: column;
             justify-content: center;
+            overflow: hidden;
         }
 
-        .logo {
+        .logos-section::before,
+        .logos-section::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            width: clamp(60px, 8vw, 120px);
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .logos-section::before {
+            left: 0;
+            background: linear-gradient(to right, #f8fafc, transparent);
+        }
+
+        .logos-section::after {
+            right: 0;
+            background: linear-gradient(to left, #f8fafc, transparent);
+        }
+
+        .logos-header {
+            text-align: center;
+            margin-bottom: clamp(40px, 6vh, 70px);
+            z-index: 5;
+            position: relative;
+        }
+
+        .logos-header h2 {
+            font-size: clamp(26px, 3.5vw, 38px);
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: clamp(10px, 1.2vh, 16px);
+        }
+
+        .logos-header p {
+            color: #6b7280;
+            font-size: clamp(15px, 2vw, 20px);
+        }
+
+        .logos-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: clamp(35px, 5vh, 60px);
+        }
+
+        .logo-row {
             display: flex;
             align-items: center;
-            gap: 12px;
-            margin-bottom: 32px;
+            white-space: nowrap;
         }
 
-        .logo-icon {
-            font-size: 32px;
+        .logo-item {
+            margin: 0 clamp(50px, 6vw, 80px);
+            flex-shrink: 0;
         }
 
-        .logo-text {
-            font-size: 24px;
-            font-weight: 700;
-            color: #1f2937;
+        .logo-item img {
+            height: clamp(24px, 3vh, 36px);
+            width: auto;
+            max-width: clamp(120px, 14vw, 180px);
+            object-fit: contain;
+            opacity: 0.7;
+            transition: opacity 0.3s ease;
         }
 
-        .form-title {
-            font-size: 28px;
-            font-weight: 700;
-            color: #1f2937;
-            margin-bottom: 8px;
+        .logo-item:hover img {
+            opacity: 1;
         }
 
-        .form-subtitle {
-            color: #6b7280;
-            margin-bottom: 32px;
-            font-size: 16px;
+        /* Right side - Sign In Form */
+        .form-section {
+            flex: 1;
+            padding: clamp(40px, 6vh, 80px) clamp(40px, 5vw, 80px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            position: relative;
         }
 
-        .google-btn {
+        .form-container {
+            max-width: clamp(380px, 50vw, 520px);
+            margin: 0 auto;
             width: 100%;
-            padding: 12px 24px;
-            border: 2px solid #e5e7eb;
-            border-radius: 8px;
-            background: white;
-            color: #374151;
-            font-size: 16px;
-            font-weight: 500;
+        }
+
+        .brand-section {
+            text-align: center;
+            margin-bottom: clamp(30px, 4vh, 50px);
+        }
+
+        .brand-logo {
+            width: clamp(48px, 6vw, 68px);
+            height: clamp(48px, 6vw, 68px);
+            margin: 0 auto clamp(12px, 2vh, 20px) auto;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 12px;
+        }
+
+        .brand-logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .brand-name {
+            font-size: clamp(22px, 3vw, 32px);
+            font-weight: 900;
+            background: linear-gradient(135deg, #2563eb, #7c3aed);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: clamp(12px, 2vh, 20px);
+        }
+
+        .welcome-text {
+            font-size: clamp(26px, 3.5vw, 36px);
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: clamp(6px, 1vh, 12px);
+        }
+
+        .welcome-subtitle {
+            color: #6b7280;
+            font-size: clamp(14px, 2vw, 20px);
+            margin-bottom: clamp(24px, 3.5vh, 40px);
+        }
+
+        .message {
+            padding: clamp(10px, 1.5vh, 16px) clamp(12px, 2vw, 20px);
+            border-radius: clamp(6px, 1vw, 10px);
+            margin-bottom: clamp(16px, 2.5vh, 25px);
+            font-size: clamp(12px, 1.6vw, 16px);
+            display: none;
+        }
+
+        .error-message {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+        }
+
+        .success-message {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            color: #16a34a;
+        }
+
+        .auth-form {
+            margin-bottom: clamp(20px, 3vh, 35px);
+        }
+
+        .form-group {
+            margin-bottom: clamp(16px, 2.5vh, 25px);
+        }
+
+        .form-label {
+            display: block;
+            color: #374151;
+            font-weight: 500;
+            margin-bottom: clamp(6px, 1vh, 10px);
+            font-size: clamp(12px, 1.6vw, 16px);
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .input-icon {
+            position: absolute;
+            left: clamp(12px, 1.8vw, 18px);
+            top: 50%;
+            transform: translateY(-50%);
+            color: #9ca3af;
+            font-size: clamp(16px, 2.2vw, 24px);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: clamp(12px, 1.8vh, 18px) clamp(14px, 2.2vw, 22px) clamp(12px, 1.8vh, 18px) clamp(42px, 5.5vw, 60px);
+            border: 2px solid #e5e7eb;
+            border-radius: clamp(6px, 1vw, 10px);
+            font-size: clamp(14px, 2vw, 20px);
+            transition: all 0.2s ease;
+            background: white;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .btn {
+            width: 100%;
+            padding: clamp(12px, 1.8vh, 18px) clamp(20px, 3vw, 32px);
+            border-radius: clamp(6px, 1vw, 10px);
+            font-size: clamp(14px, 2vw, 20px);
+            font-weight: 600;
             cursor: pointer;
-            transition: all 0.2s;
-            margin-bottom: 24px;
+            transition: all 0.2s ease;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: clamp(6px, 1vw, 14px);
+            text-decoration: none;
         }
 
-        .google-btn:hover {
-            border-color: #d1d5db;
+        .btn-primary {
+            background: linear-gradient(135deg, #2563eb, #7c3aed);
+            color: white;
+            margin-bottom: clamp(16px, 2.5vh, 25px);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+        }
+
+        .btn-google {
+            background: white;
+            border: 2px solid #e5e7eb;
+            color: #374151;
+            margin-bottom: clamp(16px, 2.5vh, 25px);
+        }
+
+        .btn-google:hover {
             background: #f9fafb;
+            border-color: #d1d5db;
         }
 
-        .google-btn:disabled {
+        .btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
+            transform: none !important;
         }
 
         .divider {
             display: flex;
             align-items: center;
-            margin: 24px 0;
+            margin: clamp(16px, 2.5vh, 28px) 0;
             color: #9ca3af;
-            font-size: 14px;
+            font-size: clamp(12px, 1.6vw, 16px);
         }
 
         .divider::before,
@@ -115,158 +349,14 @@
         }
 
         .divider span {
-            padding: 0 16px;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-label {
-            display: block;
-            color: #374151;
-            font-weight: 500;
-            margin-bottom: 8px;
-            font-size: 14px;
-        }
-
-        .form-input {
-            width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #e5e7eb;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: border-color 0.2s;
-        }
-
-        .form-input:focus {
-            outline: none;
-            border-color: #4285f4;
-        }
-
-        .signin-btn {
-            width: 100%;
-            padding: 12px 24px;
-            background: #4285f4;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: background 0.2s;
-            margin-top: 8px;
-        }
-
-        .signin-btn:hover {
-            background: #3367d6;
-        }
-
-        .signin-btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-
-        .error-message {
-            background: #fef2f2;
-            border: 1px solid #fecaca;
-            color: #dc2626;
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 14px;
-            display: none;
-        }
-
-        .success-message {
-            background: #f0fdf4;
-            border: 1px solid #bbf7d0;
-            color: #16a34a;
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 14px;
-            display: none;
-        }
-
-        /* Development skip button - only visible in dev mode */
-        .dev-skip-btn {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            background: rgba(107, 114, 128, 0.8);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            padding: 8px 16px;
-            font-size: 12px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-            opacity: 0.7;
-            display: block; /* Changed from none to block to always show */
-        }
-
-        .dev-skip-btn:hover {
-            background: rgba(107, 114, 128, 1);
-            opacity: 1;
-        }
-
-        .dev-skip-btn.show-in-dev {
-            display: block;
-        }
-
-        .features-panel {
-            background: linear-gradient(135deg, #4285f4 0%, #34a853 100%);
-            color: white;
-            padding: 48px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
-
-        .features-title {
-            font-size: 32px;
-            font-weight: 700;
-            margin-bottom: 16px;
-            line-height: 1.2;
-        }
-
-        .features-subtitle {
-            font-size: 18px;
-            opacity: 0.9;
-            margin-bottom: 32px;
-            line-height: 1.5;
-        }
-
-        .feature-item {
-            display: flex;
-            align-items: flex-start;
-            gap: 16px;
-            margin-bottom: 24px;
-        }
-
-        .feature-icon {
-            font-size: 24px;
-            margin-top: 4px;
-        }
-
-        .feature-content h3 {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 8px;
-        }
-
-        .feature-content p {
-            opacity: 0.9;
-            line-height: 1.5;
+            padding: 0 clamp(12px, 2vw, 18px);
         }
 
         .loading-spinner {
             display: inline-block;
             width: 16px;
             height: 16px;
-            border: 2px solid #ffffff;
+            border: 2px solid currentColor;
             border-radius: 50%;
             border-top-color: transparent;
             animation: spin 1s ease-in-out infinite;
@@ -276,38 +366,193 @@
             to { transform: rotate(360deg); }
         }
 
+        .dev-skip-btn {
+            position: absolute;
+            bottom: clamp(16px, 2.5vh, 25px);
+            right: clamp(16px, 2.5vw, 25px);
+            background: rgba(107, 114, 128, 0.8);
+            color: white;
+            border: none;
+            border-radius: clamp(4px, 0.8vw, 8px);
+            padding: clamp(6px, 1vh, 10px) clamp(12px, 2vw, 18px);
+            font-size: clamp(10px, 1.4vw, 14px);
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            opacity: 0.7;
+        }
+
+        .dev-skip-btn:hover {
+            background: rgba(107, 114, 128, 1);
+            opacity: 1;
+        }
+
+        /* Google icon */
+        .google-icon {
+            width: clamp(18px, 2.5vw, 26px);
+            height: clamp(18px, 2.5vw, 26px);
+        }
+
+        /* Responsive design */
         @media (max-width: 768px) {
-            .login-container {
-                grid-template-columns: 1fr;
-                max-width: 400px;
+            .main-container {
+                flex-direction: column;
+                margin: 10px;
+                min-height: calc(100vh - 20px);
             }
 
-            .features-panel {
+            .logos-section {
                 display: none;
             }
 
-            .login-form {
-                padding: 32px;
+            .form-section {
+                padding: 40px 30px;
             }
+
+            body {
+                padding: 10px;
+            }
+        }
+
+        /* Mail and Lock icons using CSS */
+        .icon-mail::before {
+            content: "✉";
+        }
+
+        .icon-lock::before {
+            content: "🔒";
         }
     </style>
 </head>
 <body>
-    <div class="login-container">
-        <div class="login-form">
-            <div class="logo">
-                <span class="logo-icon">🚀</span>
-                <span class="logo-text">Interview Lift</span>
+    <div class="main-container">
+        <!-- Left side - Company Logos -->
+        <div class="logos-section">
+            <div class="logos-header">
+                <h2>Trusted by professionals at</h2>
+                <p>Leading companies worldwide</p>
             </div>
 
-            <h1 class="form-title">Welcome back</h1>
-            <p class="form-subtitle">Sign in to your account to continue</p>
+            <div class="logos-container">
+                <!-- Row 1 - Tech Giants (scroll left) -->
+                <div class="logo-row animate-scroll-left">
+                    <div class="logo-item"><img src="images/logos/google.svg" alt="Google"></div>
+                    <div class="logo-item"><img src="images/logos/meta.svg" alt="Meta"></div>
+                    <div class="logo-item"><img src="images/logos/amazon.svg" alt="Amazon"></div>
+                    <div class="logo-item"><img src="images/logos/apple.svg" alt="Apple"></div>
+                    <div class="logo-item"><img src="images/logos/microsoft.svg" alt="Microsoft"></div>
+                    <div class="logo-item"><img src="images/logos/netflix.svg" alt="Netflix"></div>
+                    <div class="logo-item"><img src="images/logos/tesla.svg" alt="Tesla"></div>
+                    <div class="logo-item"><img src="images/logos/nvidia.svg" alt="NVIDIA"></div>
+                    <div class="logo-item"><img src="images/logos/adobe.svg" alt="Adobe"></div>
+                    <div class="logo-item"><img src="images/logos/salesforce.svg" alt="Salesforce"></div>
+                    <!-- Duplicate for seamless scroll -->
+                    <div class="logo-item"><img src="images/logos/google.svg" alt="Google"></div>
+                    <div class="logo-item"><img src="images/logos/meta.svg" alt="Meta"></div>
+                    <div class="logo-item"><img src="images/logos/amazon.svg" alt="Amazon"></div>
+                    <div class="logo-item"><img src="images/logos/apple.svg" alt="Apple"></div>
+                    <div class="logo-item"><img src="images/logos/microsoft.svg" alt="Microsoft"></div>
+                    <div class="logo-item"><img src="images/logos/netflix.svg" alt="Netflix"></div>
+                    <div class="logo-item"><img src="images/logos/tesla.svg" alt="Tesla"></div>
+                    <div class="logo-item"><img src="images/logos/nvidia.svg" alt="NVIDIA"></div>
+                    <div class="logo-item"><img src="images/logos/adobe.svg" alt="Adobe"></div>
+                    <div class="logo-item"><img src="images/logos/salesforce.svg" alt="Salesforce"></div>
+                </div>
 
-            <div id="error-message" class="error-message"></div>
-            <div id="success-message" class="success-message"></div>
+                <!-- Row 2 - Enterprise & Software (scroll right) -->
+                <div class="logo-row animate-scroll-right">
+                    <div class="logo-item"><img src="images/logos/ibm.svg" alt="IBM"></div>
+                    <div class="logo-item"><img src="images/logos/linkedin.svg" alt="LinkedIn"></div>
+                    <div class="logo-item"><img src="images/logos/openai.svg" alt="OpenAI"></div>
+                    <div class="logo-item"><img src="images/logos/airbnb.svg" alt="Airbnb"></div>
+                    <div class="logo-item"><img src="images/logos/stripe.svg" alt="Stripe"></div>
+                    <div class="logo-item"><img src="images/logos/slack.svg" alt="Slack"></div>
+                    <div class="logo-item"><img src="images/logos/shopify.svg" alt="Shopify"></div>
+                    <div class="logo-item"><img src="images/logos/twitter.svg" alt="Twitter"></div>
+                    <div class="logo-item"><img src="images/logos/facebook.svg" alt="Facebook"></div>
+                    <div class="logo-item"><img src="images/logos/whatsapp.svg" alt="WhatsApp"></div>
+                    <!-- Duplicate for seamless scroll -->
+                    <div class="logo-item"><img src="images/logos/ibm.svg" alt="IBM"></div>
+                    <div class="logo-item"><img src="images/logos/linkedin.svg" alt="LinkedIn"></div>
+                    <div class="logo-item"><img src="images/logos/openai.svg" alt="OpenAI"></div>
+                    <div class="logo-item"><img src="images/logos/airbnb.svg" alt="Airbnb"></div>
+                    <div class="logo-item"><img src="images/logos/stripe.svg" alt="Stripe"></div>
+                    <div class="logo-item"><img src="images/logos/slack.svg" alt="Slack"></div>
+                    <div class="logo-item"><img src="images/logos/shopify.svg" alt="Shopify"></div>
+                    <div class="logo-item"><img src="images/logos/twitter.svg" alt="Twitter"></div>
+                    <div class="logo-item"><img src="images/logos/facebook.svg" alt="Facebook"></div>
+                    <div class="logo-item"><img src="images/logos/whatsapp.svg" alt="WhatsApp"></div>
+                </div>
 
-            <button id="google-signin-btn" class="google-btn">
-                <svg width="20" height="20" viewBox="0 0 24 24">
+                <!-- Row 3 - Enterprise & Technology (scroll left) -->
+                <div class="logo-row animate-scroll-left">
+                    <div class="logo-item"><img src="images/logos/paypal.svg" alt="PayPal"></div>
+                    <div class="logo-item"><img src="images/logos/dell.svg" alt="Dell"></div>
+                    <div class="logo-item"><img src="images/logos/hp.svg" alt="HP"></div>
+                    <div class="logo-item"><img src="images/logos/vmware.svg" alt="VMware"></div>
+                    <div class="logo-item"><img src="images/logos/capgemini.svg" alt="Capgemini"></div>
+                    <div class="logo-item"><img src="images/logos/accenture.svg" alt="Accenture"></div>
+                    <div class="logo-item"><img src="images/logos/amd.svg" alt="AMD"></div>
+                    <div class="logo-item"><img src="images/logos/bloomberg.svg" alt="Bloomberg"></div>
+                    <div class="logo-item"><img src="images/logos/forbes.svg" alt="Forbes"></div>
+                    <div class="logo-item"><img src="images/logos/nyt.svg" alt="New York Times"></div>
+                    <!-- Duplicate for seamless scroll -->
+                    <div class="logo-item"><img src="images/logos/paypal.svg" alt="PayPal"></div>
+                    <div class="logo-item"><img src="images/logos/dell.svg" alt="Dell"></div>
+                    <div class="logo-item"><img src="images/logos/hp.svg" alt="HP"></div>
+                    <div class="logo-item"><img src="images/logos/vmware.svg" alt="VMware"></div>
+                    <div class="logo-item"><img src="images/logos/capgemini.svg" alt="Capgemini"></div>
+                    <div class="logo-item"><img src="images/logos/accenture.svg" alt="Accenture"></div>
+                    <div class="logo-item"><img src="images/logos/amd.svg" alt="AMD"></div>
+                    <div class="logo-item"><img src="images/logos/bloomberg.svg" alt="Bloomberg"></div>
+                    <div class="logo-item"><img src="images/logos/forbes.svg" alt="Forbes"></div>
+                    <div class="logo-item"><img src="images/logos/nyt.svg" alt="New York Times"></div>
+                </div>
+
+                <!-- Row 4 - Media & Tech (scroll right) -->
+                <div class="logo-row animate-scroll-right">
+                    <div class="logo-item"><img src="images/logos/techcrunch.svg" alt="TechCrunch"></div>
+                    <div class="logo-item"><img src="images/logos/wired.svg" alt="Wired"></div>
+                    <div class="logo-item"><img src="images/logos/business-insider.svg" alt="Business Insider"></div>
+                    <div class="logo-item"><img src="images/logos/yahoo.svg" alt="Yahoo"></div>
+                    <div class="logo-item"><img src="images/logos/msn.svg" alt="MSN"></div>
+                    <div class="logo-item"><img src="images/logos/netflix.svg" alt="Netflix"></div>
+                    <div class="logo-item"><img src="images/logos/tesla.svg" alt="Tesla"></div>
+                    <div class="logo-item"><img src="images/logos/apple.svg" alt="Apple"></div>
+                    <div class="logo-item"><img src="images/logos/google.svg" alt="Google"></div>
+                    <div class="logo-item"><img src="images/logos/microsoft.svg" alt="Microsoft"></div>
+                    <!-- Duplicate for seamless scroll -->
+                    <div class="logo-item"><img src="images/logos/techcrunch.svg" alt="TechCrunch"></div>
+                    <div class="logo-item"><img src="images/logos/wired.svg" alt="Wired"></div>
+                    <div class="logo-item"><img src="images/logos/business-insider.svg" alt="Business Insider"></div>
+                    <div class="logo-item"><img src="images/logos/yahoo.svg" alt="Yahoo"></div>
+                    <div class="logo-item"><img src="images/logos/msn.svg" alt="MSN"></div>
+                    <div class="logo-item"><img src="images/logos/netflix.svg" alt="Netflix"></div>
+                    <div class="logo-item"><img src="images/logos/tesla.svg" alt="Tesla"></div>
+                    <div class="logo-item"><img src="images/logos/apple.svg" alt="Apple"></div>
+                    <div class="logo-item"><img src="images/logos/google.svg" alt="Google"></div>
+                    <div class="logo-item"><img src="images/logos/microsoft.svg" alt="Microsoft"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right side - Sign In Form -->
+        <div class="form-section">
+            <div class="form-container">
+                <div class="brand-section">
+                    <div class="brand-logo">
+                        <img src="images/logo.png" alt="Interview Lift Logo">
+                    </div>
+                    <div class="brand-name">Interview Lift</div>
+                    <h1 class="welcome-text">Welcome Back</h1>
+                    <p class="welcome-subtitle">Sign in to continue your career journey</p>
+                </div>
+
+                <div id="error-message" class="message error-message"></div>
+                <div id="success-message" class="message success-message"></div>
+
+                <button id="google-signin-btn" class="btn btn-google">
+                    <svg class="google-icon" viewBox="0 0 24 24">
                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                     <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
                     <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
@@ -317,57 +562,35 @@
             </button>
 
             <div class="divider">
-                <span>or sign in with email (recommended)</span>
-            </div>
+                    <span>Or continue with</span>
+                </div>
 
-            <form id="email-signin-form">
+                <form id="email-signin-form" class="auth-form">
                 <div class="form-group">
-                    <label for="email" class="form-label">Email address</label>
-                    <input type="email" id="email" name="email" class="form-input" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="password" class="form-label">Password</label>
-                    <input type="password" id="password" name="password" class="form-input" required>
-                </div>
-
-                <button type="submit" id="signin-btn" class="signin-btn">
-                    <span id="signin-text">Sign in</span>
-                </button>
-            </form>
-        </div>
-
-        <div class="features-panel">
-            <h2 class="features-title">AI-Powered Interview Preparation</h2>
-            <p class="features-subtitle">Get ready for your next interview with personalized AI coaching and real-time feedback.</p>
-
-            <div class="feature-item">
-                <span class="feature-icon">🎯</span>
-                <div class="feature-content">
-                    <h3>Smart Question Analysis</h3>
-                    <p>AI analyzes your responses and provides detailed feedback on structure, content, and delivery.</p>
+                        <label for="email" class="form-label">Email Address</label>
+                        <div class="input-wrapper">
+                            <span class="input-icon icon-mail"></span>
+                            <input type="email" id="email" name="email" class="form-input" placeholder="Enter your email" required>
                 </div>
             </div>
 
-            <div class="feature-item">
-                <span class="feature-icon">📊</span>
-                <div class="feature-content">
-                    <h3>Performance Tracking</h3>
-                    <p>Track your progress over time with detailed analytics and improvement suggestions.</p>
+                    <div class="form-group">
+                        <label for="password" class="form-label">Password</label>
+                        <div class="input-wrapper">
+                            <span class="input-icon icon-lock"></span>
+                            <input type="password" id="password" name="password" class="form-input" placeholder="Enter your password" required>
                 </div>
             </div>
 
-            <div class="feature-item">
-                <span class="feature-icon">🚀</span>
-                <div class="feature-content">
-                    <h3>Interview Simulation</h3>
-                    <p>Practice with realistic interview scenarios tailored to your target role and industry.</p>
-                </div>
+                    <button type="submit" id="signin-btn" class="btn btn-primary">
+                        <span id="signin-text">Sign In</span>
+                    </button>
+                </form>
             </div>
         </div>
     </div>
 
-    <!-- Development only skip button -->
+    <!-- Development skip button -->
     <button id="dev-skip-btn" class="dev-skip-btn" title="Skip authentication">
         Skip Login
     </button>
@@ -390,7 +613,7 @@
             try {
                 const isDev = await ipcRenderer.invoke('is-development-mode');
                 if (isDev) {
-                    devSkipBtn.classList.add('show-in-dev');
+                    devSkipBtn.style.display = 'block';
                     console.log('🔧 Development mode detected - skip button enabled');
                 }
             } catch (error) {

@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { app } = require('electron');
+const sudo = require('sudo-prompt');
 
 class WindowsAudioRecorder {
     constructor() {
@@ -34,24 +35,27 @@ class WindowsAudioRecorder {
      * Get the path to the C# recorder executable
      */
     getRecorderPath() {
+        console.log('[DEBUG] process.cwd():', process.cwd());
         if (app.isPackaged) {
             // In packaged app, look in resources
             const resourcesPath = process.resourcesPath;
             const recorderPath = path.join(resourcesPath, 'bin', 'Recorder.exe');
-            
+            console.log('[DEBUG] Checking packaged path:', recorderPath, 'Exists:', fs.existsSync(recorderPath));
             if (fs.existsSync(recorderPath)) {
                 console.log('Using packaged C# Recorder:', recorderPath);
                 return recorderPath;
             }
         } else {
             // In development, prefer Release build, fallback to Debug
-            const releaseRecorderPath = path.join(process.cwd(), 'src', 'windows', 'bin', 'x64', 'Release', 'net8.0', 'win-x64', 'publish', 'Recorder.exe');
+            const releaseRecorderPath = path.join(process.cwd(), 'src', 'windows', 'bin', 'Release', 'net8.0', 'win-x64', 'publish', 'Recorder.exe');
+            console.log('[DEBUG] Checking release path:', releaseRecorderPath, 'Exists:', fs.existsSync(releaseRecorderPath));
             if (fs.existsSync(releaseRecorderPath)) {
                 console.log('Using development Release C# Recorder:', releaseRecorderPath);
                 return releaseRecorderPath;
             }
             
-            const debugRecorderPath = path.join(process.cwd(), 'src', 'windows', 'bin', 'x64', 'Debug', 'net8.0', 'win-x64', 'Recorder.exe');
+            const debugRecorderPath = path.join(process.cwd(), 'src', 'windows', 'bin', 'Debug', 'net8.0', 'win-x64', 'Recorder.exe');
+            console.log('[DEBUG] Checking debug path:', debugRecorderPath, 'Exists:', fs.existsSync(debugRecorderPath));
             if (fs.existsSync(debugRecorderPath)) {
                 console.log('Using development Debug C# Recorder:', debugRecorderPath);
                 return debugRecorderPath;
@@ -79,6 +83,40 @@ class WindowsAudioRecorder {
             
             testProcess.on('close', (code) => {
                 resolve(code === 0);
+            });
+        });
+    }
+
+    // Try to run recorder with admin privileges
+    async tryRecorderWithAdmin(args = ['--test-audio-quick']) {
+        if (!this.recorderPath) {
+            console.error('C# Recorder path not available for admin execution');
+            return false;
+        }
+
+        return new Promise((resolve) => {
+            const command = `"${this.recorderPath}" ${args.join(' ')}`;
+            const options = {
+                name: 'Interview Lift Audio Recorder'
+            };
+
+            console.log('🔐 Trying to run C# Recorder with admin privileges...');
+            
+            sudo.exec(command, options, (error, stdout, stderr) => {
+                if (error) {
+                    console.error('❌ Admin execution failed:', error.message);
+                    resolve(false);
+                    return;
+                }
+
+                console.log('✅ Admin execution successful:', stdout);
+                
+                // Check for success indicators in the output
+                const hasAudioAccess = stdout.includes('AUDIO_AVAILABLE') || 
+                                       stdout.includes('SUCCESS') ||
+                                       stdout.includes('PERMISSION_GRANTED');
+                
+                resolve(hasAudioAccess);
             });
         });
     }
