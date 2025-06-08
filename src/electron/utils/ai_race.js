@@ -15,10 +15,14 @@ async function raceTextResponse(jobRole, keySkills, context, chatHistory, onChun
     console.log(`[TIMING] 🏁 AI Race started at: ${new Date(raceStartTime).toISOString()}`);
     console.log(`[TIMING] 🏁 Racing: Gemini vs Cerebras (OpenAI disabled)`);
 
+    let winnerSource = null;
+    let isWinnerCompleted = false;
+    
     // Function to handle the first chunk from any AI
     const handleFirstChunk = (content, isFirstChunk, source) => {
         if (isFirstChunk && !winnerFound) {
             winnerFound = true;
+            winnerSource = source;
             const winTime = Date.now();
             console.log(`[TIMING] 🏆 ${source} won the race!`);
             console.log(`[TIMING] 🏆 Winner response time: ${winTime - raceStartTime}ms`);
@@ -35,31 +39,44 @@ async function raceTextResponse(jobRole, keySkills, context, chatHistory, onChun
                 });
             }
             
-            // Cancel other promises
-            activePromises.forEach(p => {
-                if (p.source !== source) {
-                    console.log(`[TIMING] ❌ Cancelling ${p.source} response...`);
-                    p.cancel();
-            }
-            });
+            // CRITICAL FIX: Don't cancel other promises immediately
+            // Keep them running as backup in case winner fails
+            console.log(`[TIMING] ⏳ Keeping backup APIs running in case ${source} fails...`);
         }
-        onChunk(content, isFirstChunk);
+        
+        // Only process chunks from the winner to avoid duplicate content
+        if (!winnerFound || source === winnerSource) {
+            onChunk(content, isFirstChunk);
+        }
     };
 
     // Function to handle completion
     const handleComplete = (text, prompt, source) => {
-        if (!winnerFound) {
-            winnerFound = true;
-            console.log(`🏆 ${source} won the race!`);
-            // Cancel other promises
-            activePromises.forEach(p => {
-                if (p.source !== source) {
-                    console.log(`Cancelling ${p.source} response...`);
-                    p.cancel();
-                }
-            });
+        // Only process completion from the winner
+        if (source === winnerSource || !winnerFound) {
+            if (!winnerFound) {
+                winnerFound = true;
+                winnerSource = source;
+                console.log(`🏆 ${source} won the race!`);
+            }
+            
+            if (!isWinnerCompleted) {
+                isWinnerCompleted = true;
+                console.log(`✅ ${source} completed successfully`);
+                
+                // Now we can safely cancel other promises since winner completed
+                activePromises.forEach(p => {
+                    if (p.source !== source) {
+                        console.log(`[TIMING] ❌ Cancelling ${p.source} response after winner completion...`);
+                        p.cancel();
+                    }
+                });
+                
+                onComplete(text, prompt);
+            }
+        } else {
+            console.log(`🚫 Ignoring completion from ${source} - ${winnerSource} already won`);
         }
-        onComplete(text, prompt);
     };
 
     // Function to handle errors
@@ -67,9 +84,29 @@ async function raceTextResponse(jobRole, keySkills, context, chatHistory, onChun
         console.error(`${source} error:`, error);
         errors.push({ source, error });
         
+        // CRITICAL FIX: If the winner failed, try to use backup
+        if (source === winnerSource && !isWinnerCompleted) {
+            console.log(`🚨 Winner ${source} failed! Attempting backup recovery...`);
+            
+            // Find a backup that hasn't errored
+            const backup = activePromises.find(p => 
+                p.source !== source && 
+                !errors.some(e => e.source === p.source)
+            );
+            
+            if (backup) {
+                console.log(`🔄 Switching to backup: ${backup.source}`);
+                winnerSource = backup.source;
+                // The backup will continue streaming normally
+            } else {
+                console.log(`❌ No backup available - all AIs failed`);
+                onError(error);
+            }
+        }
+        
         // If all AIs have errored, call onError with the first error
         // Now only 2 AIs: Gemini and Cerebras
-        if (errors.length === 2) {
+        if (errors.length === 2 && isWinnerCompleted) {
             onError(errors[0].error);
         }
     };

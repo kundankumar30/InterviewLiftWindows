@@ -243,13 +243,17 @@ window.addEventListener('DOMContentLoaded', () => {
         // The main process will handle navigation back to login
       } else {
         console.error('❌ Sign out failed:', result);
-        alert('Failed to sign out. Please try again.');
+        // PRIVACY FIX: Disable alert to prevent app exposure during interviews
+        // alert('Failed to sign out. Please try again.');
+        console.error('🚨 Failed to sign out. Please try again.');
         signOutBtn.disabled = false;
         signOutBtn.textContent = '⏻';
       }
     } catch (error) {
       console.error('❌ Sign out error:', error);
-      alert('Failed to sign out. Please try again.');
+              // PRIVACY FIX: Disable alert to prevent app exposure during interviews
+        // alert('Failed to sign out. Please try again.');
+        console.error('🚨 Failed to sign out. Please try again.');
       signOutBtn.disabled = false;
       signOutBtn.textContent = '⏻';
     }
@@ -297,7 +301,32 @@ window.addEventListener('DOMContentLoaded', () => {
       // Navigate to overlay screen after system prompt setup
       ipcRenderer.send('navigate', 'overlay');
     } else {
-      alert('Please fill in both Job Role and Key Skills fields');
+              // PRIVACY FIX: Disable alert to prevent app exposure during interviews
+        // alert('Please fill in both Job Role and Key Skills fields');
+        console.error('🚨 Please fill in both Job Role and Key Skills fields');
+        
+        // Show inline error message instead of alert
+        const errorDiv = document.createElement('div');
+        errorDiv.style.cssText = `
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-top: 10px;
+            font-size: 14px;
+        `;
+        errorDiv.textContent = 'Please fill in both Job Role and Key Skills fields';
+        
+        // Remove any existing error messages
+        const existingError = document.querySelector('.validation-error');
+        if (existingError) existingError.remove();
+        
+        errorDiv.className = 'validation-error';
+        document.querySelector('.form-container').appendChild(errorDiv);
+        
+        // Auto-remove after 3 seconds
+        setTimeout(() => errorDiv.remove(), 3000);
     }
   };
 

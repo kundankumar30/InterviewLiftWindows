@@ -308,16 +308,82 @@ function cleanupOldTranscriptLines() {
     }
 }
 
+// Add visual boundary between AI responses
+function addResponseBoundary() {
+    if (!suggestionsContent) return;
+    
+    console.log('🔲 Adding response boundary separator');
+    
+    const boundary = document.createElement('div');
+    boundary.className = 'response-boundary';
+    
+    // Create visual separator with styling
+    boundary.innerHTML = `
+        <div class="boundary-line"></div>
+        <div class="boundary-text">• • •</div>
+        <div class="boundary-line"></div>
+    `;
+    
+    // Add inline styles for immediate visual effect
+    boundary.style.cssText = `
+        display: flex;
+        align-items: center;
+        margin: 1rem 0;
+        padding: 0.5rem 0;
+        opacity: 0.6;
+        pointer-events: none;
+        user-select: none;
+    `;
+    
+    const lines = boundary.querySelectorAll('.boundary-line');
+    lines.forEach(line => {
+        line.style.cssText = `
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.3), transparent);
+            margin: 0 0.5rem;
+        `;
+    });
+    
+    const text = boundary.querySelector('.boundary-text');
+    if (text) {
+        text.style.cssText = `
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.8rem;
+            font-weight: 300;
+            letter-spacing: 0.2rem;
+            white-space: nowrap;
+        `;
+    }
+    
+    // Append boundary to suggestions
+    suggestionsContent.appendChild(boundary);
+    console.log('✅ Response boundary added');
+    
+    // Auto-scroll to show the boundary
+    const suggestionsArea = document.getElementById('suggestionsArea');
+    if (suggestionsArea) {
+        setTimeout(() => {
+            suggestionsArea.scrollTop = suggestionsArea.scrollHeight;
+        }, 100);
+    }
+}
+
 function cleanupOldSuggestions() {
     if (!suggestionsContent) return;
     
-    const suggestions = suggestionsContent.querySelectorAll('.suggestion-container');
-    if (suggestions.length > MAX_SUGGESTIONS) {
-        const suggestionsToRemove = suggestions.length - MAX_SUGGESTIONS;
-        for (let i = 0; i < suggestionsToRemove; i++) {
-            suggestions[i].remove();
+    // Clean up both suggestions and boundaries, but keep recent ones
+    const allElements = suggestionsContent.children;
+    const maxElements = MAX_SUGGESTIONS * 2; // Account for boundaries
+    
+    if (allElements.length > maxElements) {
+        const elementsToRemove = allElements.length - maxElements;
+        for (let i = 0; i < elementsToRemove; i++) {
+            if (allElements[0]) {
+                allElements[0].remove();
+            }
         }
-        console.log(`🧹 Cleaned up ${suggestionsToRemove} old suggestions, keeping latest ${MAX_SUGGESTIONS}`);
+        console.log(`🧹 Cleaned up ${elementsToRemove} old elements (suggestions + boundaries)`);
     }
 }
 
@@ -578,34 +644,34 @@ function createNewSuggestionElement(title, content) {
     console.log(`🎯 DEBUGGING: title="${title}", content="${content}"`);
     
     try {
-        const suggestionElement = document.createElement('div');
-        suggestionElement.className = 'suggestion-item';
+    const suggestionElement = document.createElement('div');
+    suggestionElement.className = 'suggestion-item';
         console.log('🎯 DEBUGGING: Main element created');
-        
-        // Add response ID as data attribute
-        if (currentResponseId) {
-            suggestionElement.dataset.responseId = currentResponseId;
+    
+    // Add response ID as data attribute
+    if (currentResponseId) {
+        suggestionElement.dataset.responseId = currentResponseId;
             console.log('🎯 DEBUGGING: Response ID added:', currentResponseId);
-        }
-        
-        const titleElement = document.createElement('div');
-        titleElement.className = 'suggestion-title';
-        titleElement.textContent = title;
+    }
+    
+    const titleElement = document.createElement('div');
+    titleElement.className = 'suggestion-title';
+    titleElement.textContent = title;
         console.log('🎯 DEBUGGING: Title element created');
-        
-        const contentElement = document.createElement('div');
-        contentElement.className = 'suggestion-content';
+    
+    const contentElement = document.createElement('div');
+    contentElement.className = 'suggestion-content';
         console.log('🎯 DEBUGGING: Content element created, about to set content');
         
         // Use unified formatter instead of plain text
         setStreamingContentSmart(contentElement, content);
         console.log('🎯 DEBUGGING: Content set using setStreamingContentSmart');
-        
-        suggestionElement.appendChild(titleElement);
-        suggestionElement.appendChild(contentElement);
+    
+    suggestionElement.appendChild(titleElement);
+    suggestionElement.appendChild(contentElement);
         console.log('🎯 DEBUGGING: Elements appended, returning suggestion element');
-        
-        return suggestionElement;
+    
+    return suggestionElement;
     } catch (error) {
         console.error('❌ DEBUGGING: Error in createNewSuggestionElement:', error);
         console.error(error.stack);
@@ -1141,7 +1207,7 @@ function clearTranscriptAndSuggestions() {
     
     // Update display status
             updateStatus('Cleared', '#00ff88');
-        setTimeout(() => {
+    setTimeout(() => {
             updateStatus('Ready', '#00ff88');
     }, 1500);
 }
@@ -1554,6 +1620,9 @@ ipcRenderer.on('suggestion-update', (event, data) => {
                 winningResponseId = data.responseId;
                 console.log(`🏆 New question detected - Response ${data.responseId} is now the winner!`);
                 console.log(`🔄 Previous winner tracking reset for fresh start`);
+                
+                // Start health monitoring for this response
+                monitorResponseHealth(data.responseId);
             }
             
             // Record timing for first chunk display
@@ -1583,17 +1652,17 @@ ipcRenderer.on('suggestion-update', (event, data) => {
                     console.log(`🎯 DEBUGGING: title = "${data.title || ''}"`, `content = "${currentStreamingResponseText}"`);
                     
                     try {
-                        // Create new suggestion element (not yet appended to DOM)
-                        activeStreamingSuggestionElement = createNewSuggestionElement(data.title || '', currentStreamingResponseText);
-                        currentResponseElement = activeStreamingSuggestionElement;
+                    // Create new suggestion element (not yet appended to DOM)
+                    activeStreamingSuggestionElement = createNewSuggestionElement(data.title || '', currentStreamingResponseText);
+                    currentResponseElement = activeStreamingSuggestionElement;
                         console.log('🎯 DEBUGGING: Element created successfully');
-                        
+                    
                         // Check if suggestionsContent exists
                         console.log('🎯 DEBUGGING: Checking suggestionsContent...', !!suggestionsContent);
-                        if (suggestionsContent) {
+                    if (suggestionsContent) {
                             console.log('🎯 DEBUGGING: suggestionsContent found, appending element');
-                            suggestionsContent.appendChild(activeStreamingSuggestionElement);
-                            console.log('✅ New streaming suggestion element appended to DOM');
+                        suggestionsContent.appendChild(activeStreamingSuggestionElement);
+                        console.log('✅ New streaming suggestion element appended to DOM');
                             console.log(`🎯 DEBUGGING: suggestionsContent now has ${suggestionsContent.children.length} children`);
                         } else {
                             console.error('❌ DEBUGGING: suggestionsContent not found!');
@@ -1616,6 +1685,11 @@ ipcRenderer.on('suggestion-update', (event, data) => {
             if (winningResponseId && data.responseId && data.responseId !== winningResponseId) {
                 console.log(`🛑 Ignoring chunk from ${data.responseId} - ${winningResponseId} already won`);
                 return;
+            }
+            
+            // Reset timeout for this response - we received a new chunk
+            if (data.responseId) {
+                resetResponseTimeout(data.responseId);
             }
             
             // Subsequent chunks of the same stream - append ONLY the new chunk
@@ -1668,8 +1742,16 @@ ipcRenderer.on('suggestion-update', (event, data) => {
                 console.log(`  currentStreamingResponseText: "${currentStreamingResponseText}"`);
             }
             
+            // Add visual boundary after completed AI response
+            addResponseBoundary();
+            
             // Clean up old suggestions to maintain limit
             cleanupOldSuggestions();
+            
+            // Clear response monitoring - response completed successfully
+            if (data.responseId) {
+                clearResponseTimeout(data.responseId);
+            }
             
             // CRITICAL FIX: Reset AI call tracking to allow new questions
             // Clear lastAICallText after each response completes to enable subsequent AI calls
@@ -1751,6 +1833,9 @@ ipcRenderer.on('solution-generated', (event, data) => {
                 updateSuggestionContent(activeStreamingScreenshotElement, currentStreamingScreenshotText, true);
                 console.log('🎨 Screenshot solution final chunk processed with full markdown');
             }
+            
+            // Add visual boundary after completed screenshot solution
+            addResponseBoundary();
             
             // Clean up old suggestions to maintain limit
             cleanupOldSuggestions();
@@ -2040,8 +2125,8 @@ const overlayRendererStyles = require('../../utils/overlay-renderer-styles');
 function applyTransparency() {
     console.log('🎨 Applying direct transparency with exact values...');
     
-    const transcriptArea = document.getElementById('transcriptArea');
-    const suggestionsArea = document.getElementById('suggestionsArea');
+        const transcriptArea = document.getElementById('transcriptArea');
+        const suggestionsArea = document.getElementById('suggestionsArea');
     const headerBar = document.querySelector('.header-bar');
     const statusBar = document.querySelector('.status-bar');
     
@@ -2595,4 +2680,90 @@ function initializeOverlayMemoryManagement() {
             performOverlayCleanup();
         }
     }, false, 'visibility-change-cleanup');
+}
+
+// Add response timeout monitoring after line with "let winningResponseId = null;"
+
+let responseTimeouts = new Map(); // Track timeouts for each response
+const RESPONSE_TIMEOUT_MS = 30000; // 30 seconds timeout for AI responses
+const CHUNK_TIMEOUT_MS = 10000; // 10 seconds between chunks
+
+// Monitor AI response health and recover from stalled responses
+function monitorResponseHealth(responseId) {
+    console.log(`⏰ Starting health monitoring for response ${responseId}`);
+    
+    // Clear any existing timeout for this response
+    if (responseTimeouts.has(responseId)) {
+        clearTimeout(responseTimeouts.get(responseId));
+    }
+    
+    // Set timeout for this response
+    const timeout = setTimeout(() => {
+        console.log(`🚨 Response ${responseId} timed out - attempting recovery`);
+        handleResponseTimeout(responseId);
+    }, RESPONSE_TIMEOUT_MS);
+    
+    responseTimeouts.set(responseId, timeout);
+}
+
+function resetResponseTimeout(responseId) {
+    // Reset timeout when new chunks arrive
+    if (responseTimeouts.has(responseId)) {
+        clearTimeout(responseTimeouts.get(responseId));
+        
+        const timeout = setTimeout(() => {
+            console.log(`🚨 Response ${responseId} stalled - no chunks for ${CHUNK_TIMEOUT_MS}ms`);
+            handleResponseTimeout(responseId);
+        }, CHUNK_TIMEOUT_MS);
+        
+        responseTimeouts.set(responseId, timeout);
+    }
+}
+
+function clearResponseTimeout(responseId) {
+    if (responseTimeouts.has(responseId)) {
+        clearTimeout(responseTimeouts.get(responseId));
+        responseTimeouts.delete(responseId);
+        console.log(`✅ Response ${responseId} completed - timeout cleared`);
+    }
+}
+
+function handleResponseTimeout(responseId) {
+    console.log(`🔄 Handling timeout for response ${responseId}`);
+    
+    // Clear the timeout
+    clearResponseTimeout(responseId);
+    
+    // If this is the current winner, try to recover
+    if (responseId === winningResponseId) {
+        console.log('💡 Attempting AI response recovery...');
+        
+        // Add recovery message to the response
+        const responseElement = document.querySelector(`[data-response-id="${responseId}"]`);
+        if (responseElement) {
+            const contentElement = responseElement.querySelector('.suggestion-content');
+            if (contentElement) {
+                // Add recovery notice
+                const recoveryNotice = document.createElement('div');
+                recoveryNotice.className = 'recovery-notice';
+                recoveryNotice.innerHTML = `
+                    <hr style="margin: 1rem 0; border: 1px solid rgba(255, 255, 255, 0.2);">
+                    <em style="color: rgba(255, 255, 255, 0.6); font-size: 0.9rem;">
+                        ⚠️ Response was interrupted. The answer above may be incomplete.
+                    </em>
+                `;
+                contentElement.appendChild(recoveryNotice);
+                
+                console.log('✅ Added recovery notice to incomplete response');
+            }
+        }
+        
+        // Add boundary for incomplete response
+        addResponseBoundary();
+        
+        // Reset AI call tracking to allow new questions
+        console.log('🔄 Resetting AI call tracking after timeout');
+        lastAICallText = "";
+        winningResponseId = null;
+    }
 }

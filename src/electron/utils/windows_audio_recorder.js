@@ -352,10 +352,22 @@ class WindowsAudioRecorder {
         this.isRecording = false;
         this.recorderProcess = null;
         
-        this.onStatusUpdate && this.onStatusUpdate({
-            code: 'RECORDING_STOPPED',
-            timestamp: new Date().toISOString()
-        });
+        // CRITICAL FIX: Check if onStatusUpdate callback exists and mainWindow is not destroyed
+        try {
+            if (this.onStatusUpdate && typeof this.onStatusUpdate === 'function') {
+                // Only call if the main window still exists
+                if (global.mainWindow && !global.mainWindow.isDestroyed()) {
+                    this.onStatusUpdate({
+                        code: 'RECORDING_STOPPED',
+                        timestamp: new Date().toISOString()
+                    });
+                } else {
+                    console.log('🚨 Skipping status update - main window destroyed');
+                }
+            }
+        } catch (error) {
+            console.error('🚨 Error in status update callback (likely window destroyed):', error.message);
+        }
     }
 
     // Check if recording is active

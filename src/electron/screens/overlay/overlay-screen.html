@@ -743,6 +743,34 @@
             user-select: text !important; /* Allow text selection */
             -webkit-user-select: text !important;
         }
+        
+        /* Response boundary styling */
+        .response-boundary {
+            display: flex !important;
+            align-items: center !important;
+            margin: 1.2rem 0 !important;
+            padding: 0.8rem 0 !important;
+            opacity: 0.7 !important;
+            pointer-events: none !important;
+            user-select: none !important;
+            -webkit-user-select: none !important;
+        }
+        
+        .boundary-line {
+            flex: 1 !important;
+            height: 1px !important;
+            background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.4), transparent) !important;
+            margin: 0 0.8rem !important;
+        }
+        
+        .boundary-text {
+            color: rgba(255, 255, 255, 0.6) !important;
+            font-size: 0.75rem !important;
+            font-weight: 300 !important;
+            letter-spacing: 0.3rem !important;
+            white-space: nowrap !important;
+            font-family: monospace !important;
+        }
         .code-explanation { 
             color: #6b7280; /* Darker gray for better visibility */
             margin-top: 0.3rem; 

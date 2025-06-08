@@ -239,10 +239,12 @@ async function startLiveTranscription() {
  if (platform === "darwin") {
    if (!fs.existsSync(swiftRecorderPath)) {
      console.error("Swift executable not found at:", swiftRecorderPath);
-     dialog.showErrorBox(
-       "Configuration Error",
-       "Swift recorder executable not found."
-     );
+     // PRIVACY FIX: Disable system dialog to prevent app exposure during interviews
+     // dialog.showErrorBox(
+     //   "Configuration Error",
+     //   "Swift recorder executable not found."
+     // );
+     console.error('🚨 Configuration Error: Swift recorder executable not found.');
      return false;
    }
  } else if (platform === "win32") {
@@ -252,10 +254,12 @@ async function startLiveTranscription() {
    );
  } else {
    console.error(`Unsupported platform: ${platform}`);
-   dialog.showErrorBox(
-     "Platform Error",
-     `This application currently supports macOS and Windows only. Your platform: ${platform}`
-   );
+   // PRIVACY FIX: Disable system dialog to prevent app exposure during interviews
+   // dialog.showErrorBox(
+   //   "Platform Error",
+   //   `This application currently supports macOS and Windows only. Your platform: ${platform}`
+   // );
+   console.error(`🚨 Platform Error: This application currently supports macOS and Windows only. Your platform: ${platform}`);
    return false;
  }
 
@@ -265,10 +269,12 @@ async function startLiveTranscription() {
      "Google Cloud credentials not found at:",
      googleCredentialsPath
    );
-   dialog.showErrorBox(
-     "Configuration Error",
-     "Google Cloud credentials not found."
-   );
+   // PRIVACY FIX: Disable system dialog to prevent app exposure during interviews
+   // dialog.showErrorBox(
+   //   "Configuration Error",
+   //   "Google Cloud credentials not found."
+   // );
+   console.error('🚨 Configuration Error: Google Cloud credentials not found.');
    return false;
  }
 
@@ -501,10 +507,12 @@ async function startMacOSRecording() {
                  console.error(
                    `🚫 Audio Error: Failed ${MAX_RESTART_ATTEMPTS} times. Manual restart required.`
                  );
-                 dialog.showErrorBox(
-                   "Audio Restart Limit Reached",
-                   `Audio recording has failed ${MAX_RESTART_ATTEMPTS} times. Please restart the application or use Cmd+K to reset.`
-                 );
+                 // PRIVACY FIX: Disable system dialog to prevent app exposure during interviews
+                 // dialog.showErrorBox(
+                 //   "Audio Restart Limit Reached",
+                 //   `Audio recording has failed ${MAX_RESTART_ATTEMPTS} times. Please restart the application or use Cmd+K to reset.`
+                 // );
+                 console.error(`🚨 Audio Restart Limit Reached: Audio recording has failed ${MAX_RESTART_ATTEMPTS} times. Please restart the application or use Cmd+K to reset.`);
                  stopLiveTranscription(true);
                  return;
                }
@@ -524,10 +532,12 @@ async function startMacOSRecording() {
                    jsonData.error_message || jsonData.error || ""
                  }`
                );
-               dialog.showErrorBox(
-                 "Recording Error",
-                 `Recorder stopped: ${jsonData.code}`
-               );
+               // PRIVACY FIX: Disable system dialog to prevent app exposure during interviews
+               // dialog.showErrorBox(
+               //   "Recording Error",
+               //   `Recorder stopped: ${jsonData.code}`
+               // );
+               console.error(`🚨 Recording Error: Recorder stopped: ${jsonData.code}`);
                stopLiveTranscription(true); // Full reset if critical error
              }
            }
@@ -559,10 +569,12 @@ async function startMacOSRecording() {
 
  swiftProcess.on("error", (err) => {
    console.error("Failed to start Swift process:", err);
-   dialog.showErrorBox(
-     "Swift Process Error",
-     `Failed to start recorder: ${err.message}`
-   );
+   // PRIVACY FIX: Disable system dialog to prevent app exposure during interviews
+   // dialog.showErrorBox(
+   //   "Swift Process Error",
+   //   `Failed to start recorder: ${err.message}`
+   // );
+   console.error(`🚨 Swift Process Error: Failed to start recorder: ${err.message}`);
    stopLiveTranscription(true);
  });
 
@@ -632,46 +644,51 @@ async function startWindowsRecording() {
    },
    onStatusUpdate: (status) => {
      console.log("Windows Recorder Status:", status);
+     
+     // CRITICAL FIX: Check if window still exists before sending status updates
      if (
        global.mainWindow &&
        global.mainWindow.webContents &&
        !global.mainWindow.isDestroyed()
      ) {
-       if (status.code === "RECORDING_STARTED") {
-         global.mainWindow.webContents.send(
-           "recording-status",
-           "LIVE_TRANSCRIPTION_STARTED",
-           Date.now()
-         );
+       try {
+         if (status.code === "RECORDING_STARTED") {
+           global.mainWindow.webContents.send(
+             "recording-status",
+             "LIVE_TRANSCRIPTION_STARTED",
+             Date.now()
+           );
 
+           // Start screen capture for thumbnail on Windows
+           startWindowsScreenCapture();
+         } else if (status.code === "RECORDING_STOPPED") {
+           global.mainWindow.webContents.send(
+             "recording-status",
+             "LIVE_TRANSCRIPTION_STOPPED",
+             Date.now()
+           );
 
-         // Start screen capture for thumbnail on Windows
-         startWindowsScreenCapture();
-       } else if (status.code === "RECORDING_STOPPED") {
-         global.mainWindow.webContents.send(
-           "recording-status",
-           "LIVE_TRANSCRIPTION_STOPPED",
-           Date.now()
-         );
-
-
-         // Stop screen capture when recording stops
-         stopWindowsScreenCapture();
+           // Stop screen capture when recording stops
+           stopWindowsScreenCapture();
+         }
+       } catch (error) {
+         console.error('🚨 Error sending recording status (window likely destroyed):', error.message);
+         // Don't crash the recorder - just log and continue
        }
+     } else {
+       console.log('🚨 Skipping recording status update - main window destroyed or unavailable');
      }
    },
    onError: (error) => {
      console.error("Windows Recorder Error:", error);
      console.error("Windows Audio Error:", error.message || error.code);
 
-
-     // Only stop transcription for critical errors, not startup timeouts
+     // ENHANCED ERROR RECOVERY: Auto-retry for transient errors
      if (error.code === "RECORDER_STARTUP_TIMEOUT") {
        console.log(
          "🚫 C# Recorder startup timeout - keeping transcription alive for retry"
        );
        // Don't stop transcription for startup timeout - it might work on retry
-
 
        // Send status update but don't stop transcription
        if (
@@ -679,12 +696,30 @@ async function startWindowsRecording() {
          global.mainWindow.webContents &&
          !global.mainWindow.isDestroyed()
        ) {
-         global.mainWindow.webContents.send(
-           "recording-status",
-           "LIVE_TRANSCRIPTION_STARTED",
-           Date.now()
-         );
+         try {
+           global.mainWindow.webContents.send(
+             "recording-status",
+             "LIVE_TRANSCRIPTION_STARTED",
+             Date.now()
+           );
+         } catch (err) {
+           console.error('🚨 Error sending status during timeout recovery:', err.message);
+         }
        }
+       
+       // Schedule auto-retry after 5 seconds for timeout errors
+       console.log('🔄 Scheduling auto-retry for recorder timeout...');
+       setTimeout(async () => {
+         if (windowsRecorder && !windowsRecorder.isActive()) {
+           console.log('🔄 Auto-retrying Windows recorder after timeout...');
+           try {
+             await windowsRecorder.startRecording();
+           } catch (retryError) {
+             console.error('❌ Auto-retry failed:', retryError);
+           }
+         }
+       }, 5000);
+       
      } else if (error.code === "FFMPEG_NOT_FOUND") {
        console.log("🔄 Stopping transcription due to missing FFmpeg");
        stopLiveTranscription(true);
@@ -702,10 +737,12 @@ async function startWindowsRecording() {
        }
 
 
-       dialog.showErrorBox(
-         "FFmpeg Required",
-         "FFmpeg is required for Windows audio capture. Please install FFmpeg and ensure it's in your system PATH, then restart the application."
-       );
+       // PRIVACY FIX: Disable system dialog to prevent app exposure during interviews
+       // dialog.showErrorBox(
+       //   "FFmpeg Required", 
+       //   "FFmpeg is required for Windows audio capture. Please install FFmpeg and ensure it's in your system PATH, then restart the application."
+       // );
+       console.error('🚨 FFmpeg Required: FFmpeg is required for Windows audio capture. Please install FFmpeg and ensure it\'s in your system PATH, then restart the application.');
      } else if (
        error.code === "RECORDER_PROCESS_ERROR" ||
        error.code === "RECORDER_START_ERROR"
