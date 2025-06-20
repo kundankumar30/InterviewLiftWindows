@@ -1,20 +1,24 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Interview Lift - Sign In</title>
     <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;900&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        /* Reset any global styles */
+        :root {
+            color-scheme: light;
+        }
+        
+        html {
+            background: #ffffff;
+            color-scheme: light;
         }
 
         body {
             font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #fafafa 0%, #ffffff 50%, #f8fafc 100%);
+            background: #ffffff;
             min-height: 100vh;
             padding: 0;
             margin: 0;
@@ -23,6 +27,15 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            color: #1f2937;
+        }
+
+        /* Override any dark mode preferences */
+        @media (prefers-color-scheme: dark) {
+            html, body {
+                background: #ffffff;
+                color: #1f2937;
+            }
         }
 
         /* Background effects */
@@ -52,20 +65,20 @@
         /* Logo scroll animations */
         @keyframes scroll-left {
             0% { transform: translateX(0); }
-            100% { transform: translateX(-100%); }
+            100% { transform: translateX(-50%); }
         }
 
         @keyframes scroll-right {
-            0% { transform: translateX(-100%); }
+            0% { transform: translateX(-50%); }
             100% { transform: translateX(0); }
         }
 
         .animate-scroll-left {
-            animation: scroll-left 30s linear infinite;
+            animation: scroll-left 40s linear infinite;
         }
 
         .animate-scroll-right {
-            animation: scroll-right 30s linear infinite;
+            animation: scroll-right 40s linear infinite;
         }
 
         .main-container {
@@ -82,7 +95,7 @@
         /* Left side - Company Logos */
         .logos-section {
             flex: 1;
-            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f1f5f9 100%);
+            background: #ffffff;
             position: relative;
             padding: clamp(40px, 6vh, 80px) clamp(30px, 4vw, 60px);
             display: flex;
@@ -104,12 +117,12 @@
 
         .logos-section::before {
             left: 0;
-            background: linear-gradient(to right, #f8fafc, transparent);
+            background: linear-gradient(to right, #ffffff, transparent);
         }
 
         .logos-section::after {
             right: 0;
-            background: linear-gradient(to left, #f8fafc, transparent);
+            background: linear-gradient(to left, #ffffff, transparent);
         }
 
         .logos-header {
@@ -137,30 +150,78 @@
             flex-direction: column;
             justify-content: center;
             gap: clamp(35px, 5vh, 60px);
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+            -moz-backface-visibility: hidden;
+            transform: translate3d(0, 0, 0);
+            -webkit-transform: translate3d(0, 0, 0);
+            -moz-transform: translate3d(0, 0, 0);
         }
 
         .logo-row {
             display: flex;
             align-items: center;
+            justify-content: flex-start;
             white-space: nowrap;
+            width: fit-content;
+            will-change: transform;
+            backface-visibility: hidden;
+            -webkit-font-smoothing: antialiased;
+            gap: clamp(40px, 5vw, 60px);
         }
 
         .logo-item {
             margin: 0 clamp(50px, 6vw, 80px);
             flex-shrink: 0;
+            transform: scale(1);
+            transition: transform 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: clamp(32px, 4vh, 48px);
+        }
+
+        /* Special handling for Goldman Sachs logo */
+        .logo-item img[alt="Goldman Sachs"] {
+            height: 120%;
+            max-width: clamp(150px, 16vw, 200px);
         }
 
         .logo-item img {
-            height: clamp(24px, 3vh, 36px);
+            height: 100%;
             width: auto;
             max-width: clamp(120px, 14vw, 180px);
             object-fit: contain;
-            opacity: 0.7;
-            transition: opacity 0.3s ease;
+            opacity: 1;
+            transition: all 0.3s ease;
+            /* Preserve SVG colors */
+            fill: currentColor;
+            color: inherit;
+        }
+
+        /* Ensure SVGs maintain aspect ratio and colors */
+        .logo-item img[src$=".svg"] {
+            aspect-ratio: auto;
+            width: auto;
+            min-width: 24px;
+            /* Preserve SVG colors */
+            fill: currentColor;
+            color: inherit;
+        }
+
+        /* Add subtle transform on hover */
+        .logo-item:hover {
+            transform: scale(1.05);
         }
 
         .logo-item:hover img {
             opacity: 1;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Add gap between duplicated logo sets */
+        .logo-row > .logo-item:last-child {
+            margin-right: clamp(100px, 12vw, 160px);
         }
 
         /* Right side - Sign In Form */
@@ -326,6 +387,17 @@
             border-color: #d1d5db;
         }
 
+        .btn-secondary {
+            background: #f9fafb;
+            border: 2px solid #e5e7eb;
+            color: #374151;
+        }
+
+        .btn-secondary:hover {
+            background: #f3f4f6;
+            border-color: #d1d5db;
+        }
+
         .btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
@@ -422,6 +494,178 @@
         .icon-lock::before {
             content: "🔒";
         }
+
+        .icon-phone::before {
+            content: "📱";
+        }
+
+        /* Country dropdown styling */
+        .country-item {
+            width: 100%;
+            padding: clamp(10px, 1.5vh, 16px) clamp(16px, 2.5vw, 20px);
+            text-align: left;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            font-size: clamp(14px, 1.8vw, 18px);
+            color: #374151;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .country-item:hover {
+            background: linear-gradient(135deg, rgba(37, 99, 235, 0.1), rgba(124, 58, 237, 0.1));
+            color: #2563eb;
+            border-bottom-color: #e5e7eb;
+        }
+
+        .country-item:last-child {
+            border-bottom: none;
+        }
+
+        .country-flag {
+            margin-right: clamp(12px, 2vw, 16px);
+            font-size: clamp(18px, 2.5vw, 22px);
+        }
+
+        .country-name {
+            flex: 1;
+            text-align: left;
+            font-weight: 500;
+        }
+
+        .country-dial {
+            color: #6b7280;
+            font-size: clamp(13px, 1.6vw, 16px);
+            margin-left: clamp(8px, 1.5vw, 12px);
+            font-weight: 600;
+        }
+
+        /* Phone icon using CSS */
+        .icon-phone::before {
+            content: "📱";
+        }
+
+        /* Additional styles for OTP flow */
+        .flex {
+            display: flex;
+        }
+
+        .items-center {
+            align-items: center;
+        }
+
+        .relative {
+            position: relative;
+        }
+
+        .absolute {
+            position: absolute;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .space-y-3 > * + * {
+            margin-top: clamp(12px, 2vh, 16px);
+        }
+
+        .z-50 {
+            z-index: 50;
+        }
+
+        .border-l-0 {
+            border-left: none;
+        }
+
+        .rounded-l-none {
+            border-top-left-radius: 0;
+            border-bottom-left-radius: 0;
+        }
+
+        .top-full {
+            top: 100%;
+        }
+
+        .mt-1 {
+            margin-top: clamp(4px, 0.6vh, 6px);
+        }
+
+        .w-80 {
+            width: clamp(280px, 35vw, 320px);
+        }
+
+        .max-h-80 {
+            max-height: clamp(280px, 35vh, 320px);
+        }
+
+        .overflow-hidden {
+            overflow: hidden;
+        }
+
+        .overflow-y-auto {
+            overflow-y: auto;
+        }
+
+        .flex-col {
+            flex-direction: column;
+        }
+
+        .flex-1 {
+            flex: 1;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .text-lg {
+            font-size: clamp(16px, 2.2vw, 20px);
+        }
+
+        .tracking-widest {
+            letter-spacing: 0.3em;
+        }
+
+        .country-item {
+            width: 100%;
+            padding: clamp(8px, 1.2vh, 12px) clamp(12px, 2vw, 16px);
+            text-align: left;
+            border: none;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            font-size: clamp(12px, 1.6vw, 16px);
+        }
+
+        .country-item:hover {
+            background-color: #f3f4f6;
+        }
+
+        .country-item.selected {
+            background-color: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .country-flag {
+            margin-right: clamp(8px, 1.2vw, 12px);
+            font-size: clamp(16px, 2vw, 20px);
+        }
+
+        .country-name {
+            flex: 1;
+            font-weight: 500;
+        }
+
+        .country-dial {
+            color: #6b7280;
+            font-size: clamp(11px, 1.4vw, 14px);
+        }
     </style>
 </head>
 <body>
@@ -436,102 +680,64 @@
             <div class="logos-container">
                 <!-- Row 1 - Tech Giants (scroll left) -->
                 <div class="logo-row animate-scroll-left">
-                    <div class="logo-item"><img src="images/logos/google.svg" alt="Google"></div>
-                    <div class="logo-item"><img src="images/logos/meta.svg" alt="Meta"></div>
-                    <div class="logo-item"><img src="images/logos/amazon.svg" alt="Amazon"></div>
-                    <div class="logo-item"><img src="images/logos/apple.svg" alt="Apple"></div>
-                    <div class="logo-item"><img src="images/logos/microsoft.svg" alt="Microsoft"></div>
-                    <div class="logo-item"><img src="images/logos/netflix.svg" alt="Netflix"></div>
-                    <div class="logo-item"><img src="images/logos/tesla.svg" alt="Tesla"></div>
-                    <div class="logo-item"><img src="images/logos/nvidia.svg" alt="NVIDIA"></div>
-                    <div class="logo-item"><img src="images/logos/adobe.svg" alt="Adobe"></div>
-                    <div class="logo-item"><img src="images/logos/salesforce.svg" alt="Salesforce"></div>
+                    <div class="logo-item"><img src="images/logos/google.svg" alt="Google" style="color: #4285F4;"></div>
+                    <div class="logo-item"><img src="images/logos/meta.svg" alt="Meta" style="color: #0668E1;"></div>
+                    <div class="logo-item"><img src="images/logos/amazon.svg" alt="Amazon" style="color: #FF9900;"></div>
+                    <div class="logo-item"><img src="images/logos/apple.svg" alt="Apple" style="color: #000000;"></div>
+                    <div class="logo-item"><img src="images/logos/microsoft.png" alt="Microsoft" style="color: #00A4EF;"></div>
+                    <div class="logo-item"><img src="images/logos/netflix.svg" alt="Netflix" style="color: #E50914;"></div>
                     <!-- Duplicate for seamless scroll -->
-                    <div class="logo-item"><img src="images/logos/google.svg" alt="Google"></div>
-                    <div class="logo-item"><img src="images/logos/meta.svg" alt="Meta"></div>
-                    <div class="logo-item"><img src="images/logos/amazon.svg" alt="Amazon"></div>
-                    <div class="logo-item"><img src="images/logos/apple.svg" alt="Apple"></div>
-                    <div class="logo-item"><img src="images/logos/microsoft.svg" alt="Microsoft"></div>
-                    <div class="logo-item"><img src="images/logos/netflix.svg" alt="Netflix"></div>
-                    <div class="logo-item"><img src="images/logos/tesla.svg" alt="Tesla"></div>
-                    <div class="logo-item"><img src="images/logos/nvidia.svg" alt="NVIDIA"></div>
-                    <div class="logo-item"><img src="images/logos/adobe.svg" alt="Adobe"></div>
-                    <div class="logo-item"><img src="images/logos/salesforce.svg" alt="Salesforce"></div>
+                    <div class="logo-item"><img src="images/logos/google.svg" alt="Google" style="color: #4285F4;"></div>
+                    <div class="logo-item"><img src="images/logos/meta.svg" alt="Meta" style="color: #0668E1;"></div>
+                    <div class="logo-item"><img src="images/logos/amazon.svg" alt="Amazon" style="color: #FF9900;"></div>
+                    <div class="logo-item"><img src="images/logos/apple.svg" alt="Apple" style="color: #000000;"></div>
+                    <div class="logo-item"><img src="images/logos/microsoft.png" alt="Microsoft" style="color: #00A4EF;"></div>
+                    <div class="logo-item"><img src="images/logos/netflix.svg" alt="Netflix" style="color: #E50914;"></div>
                 </div>
 
                 <!-- Row 2 - Enterprise & Software (scroll right) -->
                 <div class="logo-row animate-scroll-right">
-                    <div class="logo-item"><img src="images/logos/ibm.svg" alt="IBM"></div>
-                    <div class="logo-item"><img src="images/logos/linkedin.svg" alt="LinkedIn"></div>
-                    <div class="logo-item"><img src="images/logos/openai.svg" alt="OpenAI"></div>
-                    <div class="logo-item"><img src="images/logos/airbnb.svg" alt="Airbnb"></div>
-                    <div class="logo-item"><img src="images/logos/stripe.svg" alt="Stripe"></div>
-                    <div class="logo-item"><img src="images/logos/slack.svg" alt="Slack"></div>
-                    <div class="logo-item"><img src="images/logos/shopify.svg" alt="Shopify"></div>
-                    <div class="logo-item"><img src="images/logos/twitter.svg" alt="Twitter"></div>
-                    <div class="logo-item"><img src="images/logos/facebook.svg" alt="Facebook"></div>
-                    <div class="logo-item"><img src="images/logos/whatsapp.svg" alt="WhatsApp"></div>
+                    <div class="logo-item"><img src="images/logos/tesla.svg" alt="Tesla" style="color: #CC0000;"></div>
+                    <div class="logo-item"><img src="images/logos/adobe.svg" alt="Adobe" style="color: #FF0000;"></div>
+                    <div class="logo-item"><img src="images/logos/salesforce.svg" alt="Salesforce" style="color: #00A1E0;"></div>
+                    <div class="logo-item"><img src="images/logos/linkedin.png" alt="LinkedIn" style="color: #0A66C2;"></div>
+                    <div class="logo-item"><img src="images/logos/openai.svg" alt="OpenAI" style="color: #412991;"></div>
+                    <div class="logo-item"><img src="images/logos/airbnb.svg" alt="Airbnb" style="color: #FF5A5F;"></div>
                     <!-- Duplicate for seamless scroll -->
-                    <div class="logo-item"><img src="images/logos/ibm.svg" alt="IBM"></div>
-                    <div class="logo-item"><img src="images/logos/linkedin.svg" alt="LinkedIn"></div>
-                    <div class="logo-item"><img src="images/logos/openai.svg" alt="OpenAI"></div>
-                    <div class="logo-item"><img src="images/logos/airbnb.svg" alt="Airbnb"></div>
-                    <div class="logo-item"><img src="images/logos/stripe.svg" alt="Stripe"></div>
-                    <div class="logo-item"><img src="images/logos/slack.svg" alt="Slack"></div>
-                    <div class="logo-item"><img src="images/logos/shopify.svg" alt="Shopify"></div>
-                    <div class="logo-item"><img src="images/logos/twitter.svg" alt="Twitter"></div>
-                    <div class="logo-item"><img src="images/logos/facebook.svg" alt="Facebook"></div>
-                    <div class="logo-item"><img src="images/logos/whatsapp.svg" alt="WhatsApp"></div>
+                    <div class="logo-item"><img src="images/logos/tesla.svg" alt="Tesla" style="color: #CC0000;"></div>
+                    <div class="logo-item"><img src="images/logos/adobe.svg" alt="Adobe" style="color: #FF0000;"></div>
+                    <div class="logo-item"><img src="images/logos/salesforce.svg" alt="Salesforce" style="color: #00A1E0;"></div>
+                    <div class="logo-item"><img src="images/logos/linkedin.png" alt="LinkedIn" style="color: #0A66C2;"></div>
+                    <div class="logo-item"><img src="images/logos/openai.svg" alt="OpenAI" style="color: #412991;"></div>
+                    <div class="logo-item"><img src="images/logos/airbnb.svg" alt="Airbnb" style="color: #FF5A5F;"></div>
                 </div>
 
-                <!-- Row 3 - Enterprise & Technology (scroll left) -->
+                <!-- Row 3 - Finance & Consulting (scroll left) -->
                 <div class="logo-row animate-scroll-left">
-                    <div class="logo-item"><img src="images/logos/paypal.svg" alt="PayPal"></div>
-                    <div class="logo-item"><img src="images/logos/dell.svg" alt="Dell"></div>
-                    <div class="logo-item"><img src="images/logos/hp.svg" alt="HP"></div>
-                    <div class="logo-item"><img src="images/logos/vmware.svg" alt="VMware"></div>
-                    <div class="logo-item"><img src="images/logos/capgemini.svg" alt="Capgemini"></div>
-                    <div class="logo-item"><img src="images/logos/accenture.svg" alt="Accenture"></div>
-                    <div class="logo-item"><img src="images/logos/amd.svg" alt="AMD"></div>
-                    <div class="logo-item"><img src="images/logos/bloomberg.svg" alt="Bloomberg"></div>
-                    <div class="logo-item"><img src="images/logos/forbes.svg" alt="Forbes"></div>
-                    <div class="logo-item"><img src="images/logos/nyt.svg" alt="New York Times"></div>
+                    <div class="logo-item"><img src="images/logos/stripe.svg" alt="Stripe" style="color: #008CDD;"></div>
+                    <div class="logo-item"><img src="images/logos/uber.svg" alt="Uber" style="color: #000000;"></div>
+                    <div class="logo-item"><img src="images/logos/goldman-sachs.svg" alt="Goldman Sachs" style="color: #0033A0;"></div>
+                    <div class="logo-item"><img src="images/logos/jpmorgan.svg" alt="JPMorgan" style="color: #0F4B9E;"></div>
+                    <div class="logo-item"><img src="images/logos/mckinsey.svg" alt="McKinsey" style="color: #051C2C;"></div>
+                    <div class="logo-item"><img src="images/logos/bain.svg" alt="Bain" style="color: #E32726;"></div>
                     <!-- Duplicate for seamless scroll -->
-                    <div class="logo-item"><img src="images/logos/paypal.svg" alt="PayPal"></div>
-                    <div class="logo-item"><img src="images/logos/dell.svg" alt="Dell"></div>
-                    <div class="logo-item"><img src="images/logos/hp.svg" alt="HP"></div>
-                    <div class="logo-item"><img src="images/logos/vmware.svg" alt="VMware"></div>
-                    <div class="logo-item"><img src="images/logos/capgemini.svg" alt="Capgemini"></div>
-                    <div class="logo-item"><img src="images/logos/accenture.svg" alt="Accenture"></div>
-                    <div class="logo-item"><img src="images/logos/amd.svg" alt="AMD"></div>
-                    <div class="logo-item"><img src="images/logos/bloomberg.svg" alt="Bloomberg"></div>
-                    <div class="logo-item"><img src="images/logos/forbes.svg" alt="Forbes"></div>
-                    <div class="logo-item"><img src="images/logos/nyt.svg" alt="New York Times"></div>
+                    <div class="logo-item"><img src="images/logos/stripe.svg" alt="Stripe" style="color: #008CDD;"></div>
+                    <div class="logo-item"><img src="images/logos/uber.svg" alt="Uber" style="color: #000000;"></div>
+                    <div class="logo-item"><img src="images/logos/goldman-sachs.svg" alt="Goldman Sachs" style="color: #0033A0;"></div>
+                    <div class="logo-item"><img src="images/logos/jpmorgan.svg" alt="JPMorgan" style="color: #0F4B9E;"></div>
+                    <div class="logo-item"><img src="images/logos/mckinsey.svg" alt="McKinsey" style="color: #051C2C;"></div>
+                    <div class="logo-item"><img src="images/logos/bain.svg" alt="Bain" style="color: #E32726;"></div>
                 </div>
 
-                <!-- Row 4 - Media & Tech (scroll right) -->
+                <!-- Row 4 - Consulting & Services (scroll right) -->
                 <div class="logo-row animate-scroll-right">
-                    <div class="logo-item"><img src="images/logos/techcrunch.svg" alt="TechCrunch"></div>
-                    <div class="logo-item"><img src="images/logos/wired.svg" alt="Wired"></div>
-                    <div class="logo-item"><img src="images/logos/business-insider.svg" alt="Business Insider"></div>
-                    <div class="logo-item"><img src="images/logos/yahoo.svg" alt="Yahoo"></div>
-                    <div class="logo-item"><img src="images/logos/msn.svg" alt="MSN"></div>
-                    <div class="logo-item"><img src="images/logos/netflix.svg" alt="Netflix"></div>
-                    <div class="logo-item"><img src="images/logos/tesla.svg" alt="Tesla"></div>
-                    <div class="logo-item"><img src="images/logos/apple.svg" alt="Apple"></div>
-                    <div class="logo-item"><img src="images/logos/google.svg" alt="Google"></div>
-                    <div class="logo-item"><img src="images/logos/microsoft.svg" alt="Microsoft"></div>
+                    <div class="logo-item"><img src="images/logos/bcg.svg" alt="BCG" style="color: #1E4487;"></div>
+                    <div class="logo-item"><img src="images/logos/deloitte.png" alt="Deloitte" style="color: #86BC25;"></div>
+                    <div class="logo-item"><img src="images/logos/accenture.svg" alt="Accenture" style="color: #A100FF;"></div>
                     <!-- Duplicate for seamless scroll -->
-                    <div class="logo-item"><img src="images/logos/techcrunch.svg" alt="TechCrunch"></div>
-                    <div class="logo-item"><img src="images/logos/wired.svg" alt="Wired"></div>
-                    <div class="logo-item"><img src="images/logos/business-insider.svg" alt="Business Insider"></div>
-                    <div class="logo-item"><img src="images/logos/yahoo.svg" alt="Yahoo"></div>
-                    <div class="logo-item"><img src="images/logos/msn.svg" alt="MSN"></div>
-                    <div class="logo-item"><img src="images/logos/netflix.svg" alt="Netflix"></div>
-                    <div class="logo-item"><img src="images/logos/tesla.svg" alt="Tesla"></div>
-                    <div class="logo-item"><img src="images/logos/apple.svg" alt="Apple"></div>
-                    <div class="logo-item"><img src="images/logos/google.svg" alt="Google"></div>
-                    <div class="logo-item"><img src="images/logos/microsoft.svg" alt="Microsoft"></div>
+                    <div class="logo-item"><img src="images/logos/bcg.svg" alt="BCG" style="color: #1E4487;"></div>
+                    <div class="logo-item"><img src="images/logos/deloitte.png" alt="Deloitte" style="color: #86BC25;"></div>
+                    <div class="logo-item"><img src="images/logos/accenture.svg" alt="Accenture" style="color: #A100FF;"></div>
                 </div>
             </div>
         </div>
@@ -551,41 +757,115 @@
                 <div id="error-message" class="message error-message"></div>
                 <div id="success-message" class="message success-message"></div>
 
-                <button id="google-signin-btn" class="btn btn-google">
-                    <svg class="google-icon" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                </svg>
-                <span id="google-signin-text">Continue with Google</span>
-            </button>
+                <div id="phone-stage" class="auth-form">
+                    <div class="form-group">
+                        <label for="mobile" class="form-label">Mobile Number</label>
+                        <div class="flex relative">
+                            <!-- Country Code Dropdown -->
+                            <div class="relative">
+                                <button type="button" id="country-button" class="border-r-0 rounded-r-none flex items-center justify-between" style="min-width: 120px; width: 100%; padding: clamp(12px, 1.8vh, 18px) clamp(14px, 2.2vw, 22px); border: 2px solid #e5e7eb; border-radius: clamp(6px, 1vw, 10px); font-size: clamp(14px, 2vw, 20px); transition: all 0.2s ease; background: white; box-sizing: border-box;">
+                                    <div class="flex items-center">
+                                        <span id="country-flag" class="mr-2 text-lg">🇺🇸</span>
+                                        <span id="country-code" class="text-sm font-medium text-gray-700">+1</span>
+                                    </div>
+                                    <span class="ml-1 text-gray-400">▼</span>
+                                </button>
 
-            <div class="divider">
-                    <span>Or continue with</span>
+                                <!-- Country Dropdown -->
+                                <div id="country-dropdown" class="absolute hidden top-full mt-1 w-96 bg-white border border-gray-300 rounded-lg shadow-xl max-h-96 overflow-hidden flex flex-col z-50">
+                                    <!-- Search Header -->
+                                    <div class="p-4 border-b border-gray-200 bg-white">
+                                        <div class="input-wrapper">
+                                            <span class="input-icon" style="font-size: clamp(16px, 2vw, 20px);">🔍</span>
+                                            <input type="text" id="country-search" placeholder="Search countries..." class="form-input" style="padding: clamp(10px, 1.5vh, 14px) clamp(12px, 2vw, 18px) clamp(10px, 1.5vh, 14px) clamp(38px, 5vw, 50px); font-size: clamp(13px, 1.8vw, 17px);">
+                                        </div>
+                                    </div>
+
+                                    <!-- Countries List -->
+                                    <div id="countries-list" class="overflow-y-auto flex-1">
+                                        <!-- Countries will be populated by JavaScript -->
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Phone Number Input -->
+                            <div class="flex-1 relative">
+                                <span class="input-icon icon-phone"></span>
+                                <input type="tel" id="mobile" name="mobile" class="form-input border-l-0 rounded-l-none" placeholder="Enter mobile number" required>
+                            </div>
+                        </div>
+                        
+                        <!-- Country info -->
+                        <div class="mt-2">
+                            <div id="country-info" class="text-xs text-gray-500">
+                                Required: 10 digits for United States
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="button" id="send-otp-btn" class="btn btn-primary" disabled>
+                        <span id="send-otp-text">Send OTP</span>
+                    </button>
                 </div>
 
-                <form id="email-signin-form" class="auth-form">
-                <div class="form-group">
+                <div id="otp-stage" class="auth-form" style="display: none;">
+                    <div class="form-group">
+                        <label for="otp" class="form-label">Enter OTP</label>
+                        <div class="input-wrapper">
+                            <span class="input-icon">🔒</span>
+                            <input type="text" id="otp" name="otp" class="form-input text-center text-lg tracking-widest" placeholder="000000" maxlength="6" required>
+                        </div>
+                        <div class="mt-2 text-sm text-gray-600">
+                            OTP sent to <span id="sent-to-number"></span>
+                        </div>
+                    </div>
+
+                    <div class="space-y-3">
+                        <button type="button" id="verify-otp-btn" class="btn btn-primary" disabled>
+                            <span id="verify-otp-text">Verify & Sign In</span>
+                        </button>
+                        
+                        <button type="button" id="back-to-phone-btn" class="btn btn-secondary">
+                            Back to Phone Number
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Profile Completion Stage -->
+                <div id="profile-stage" class="auth-form" style="display: none;">
+                    <div class="mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-2">Complete Your Profile</h3>
+                        <p class="text-sm text-gray-600">Please provide your name and email to continue</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="first-name" class="form-label">First Name</label>
+                        <div class="input-wrapper">
+                            <span class="input-icon">👤</span>
+                            <input type="text" id="first-name" name="first-name" class="form-input" placeholder="Enter your first name" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="last-name" class="form-label">Last Name</label>
+                        <div class="input-wrapper">
+                            <span class="input-icon">👤</span>
+                            <input type="text" id="last-name" name="last-name" class="form-input" placeholder="Enter your last name" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
                         <label for="email" class="form-label">Email Address</label>
                         <div class="input-wrapper">
                             <span class="input-icon icon-mail"></span>
                             <input type="email" id="email" name="email" class="form-input" placeholder="Enter your email" required>
-                </div>
-            </div>
+                        </div>
+                    </div>
 
-                    <div class="form-group">
-                        <label for="password" class="form-label">Password</label>
-                        <div class="input-wrapper">
-                            <span class="input-icon icon-lock"></span>
-                            <input type="password" id="password" name="password" class="form-input" placeholder="Enter your password" required>
-                </div>
-            </div>
-
-                    <button type="submit" id="signin-btn" class="btn btn-primary">
-                        <span id="signin-text">Sign In</span>
+                    <button type="button" id="complete-profile-btn" class="btn btn-primary">
+                        <span id="complete-profile-text">Complete Profile</span>
                     </button>
-                </form>
+                </div>
             </div>
         </div>
     </div>
@@ -598,18 +878,64 @@
     <script>
         const { ipcRenderer } = require('electron');
 
+        // Import countries data
+        const { countries, detectUserCountrySync, validatePhoneNumber, formatPhoneForAPI } = require('../../utils/auth/countries');
+
         // UI Elements
-        const googleSigninBtn = document.getElementById('google-signin-btn');
-        const googleSigninText = document.getElementById('google-signin-text');
-        const emailSigninForm = document.getElementById('email-signin-form');
-        const signinBtn = document.getElementById('signin-btn');
-        const signinText = document.getElementById('signin-text');
+        const phoneStage = document.getElementById('phone-stage');
+        const otpStage = document.getElementById('otp-stage');
+        const profileStage = document.getElementById('profile-stage');
+        
+        const countryButton = document.getElementById('country-button');
+        const countryFlag = document.getElementById('country-flag');
+        const countryCode = document.getElementById('country-code');
+        const countryDropdown = document.getElementById('country-dropdown');
+        const countrySearch = document.getElementById('country-search');
+        const countriesList = document.getElementById('countries-list');
+        const countryInfo = document.getElementById('country-info');
+        
+        const mobileInput = document.getElementById('mobile');
+        const sendOtpBtn = document.getElementById('send-otp-btn');
+        const sendOtpText = document.getElementById('send-otp-text');
+        
+        const otpInput = document.getElementById('otp');
+        const verifyOtpBtn = document.getElementById('verify-otp-btn');
+        const verifyOtpText = document.getElementById('verify-otp-text');
+        const backToPhoneBtn = document.getElementById('back-to-phone-btn');
+        const sentToNumber = document.getElementById('sent-to-number');
+        
+        const firstNameInput = document.getElementById('first-name');
+        const lastNameInput = document.getElementById('last-name');
+        const emailInput = document.getElementById('email');
+        const completeProfileBtn = document.getElementById('complete-profile-btn');
+        const completeProfileText = document.getElementById('complete-profile-text');
+        
         const errorMessage = document.getElementById('error-message');
         const successMessage = document.getElementById('success-message');
         const devSkipBtn = document.getElementById('dev-skip-btn');
 
-        // Check if we're in development mode and show skip button
-        async function initDevMode() {
+        // State
+        let selectedCountry = detectUserCountrySync();
+        let currentPhoneNumber = '';
+
+        // Initialize
+        async function init() {
+            console.log('🚀 Initializing OTP login screen...');
+            
+            // Auto-detect country from IP
+            try {
+                const response = await fetch('https://ipapi.co/json/');
+                const data = await response.json();
+                if (data.country_code) {
+                    selectedCountry = countries.find(c => c.code === data.country_code.toUpperCase()) || detectUserCountrySync();
+                    updateCountryDisplay();
+                }
+            } catch (error) {
+                console.log('Could not auto-detect country:', error);
+                selectedCountry = detectUserCountrySync();
+            }
+            
+            // Check development mode
             try {
                 const isDev = await ipcRenderer.invoke('is-development-mode');
                 if (isDev) {
@@ -619,10 +945,13 @@
             } catch (error) {
                 console.log('Could not determine development mode:', error);
             }
-        }
 
-        // Initialize development mode check
-        initDevMode();
+            // Set initial country
+            updateCountryDisplay();
+            populateCountriesList();
+            
+            console.log('✅ OTP login screen initialized');
+        }
 
         // Utility functions
         function showError(message) {
@@ -651,75 +980,254 @@
             }
         }
 
-        // Google Sign In
-        googleSigninBtn.addEventListener('click', async () => {
-            console.log('🔵 Google sign-in button clicked');
-            hideMessages();
-            setLoadingState(googleSigninBtn, googleSigninText, true, 'Checking...', 'Continue with Google');
+        function showStage(stage) {
+            phoneStage.style.display = stage === 'phone' ? 'block' : 'none';
+            otpStage.style.display = stage === 'otp' ? 'block' : 'none';
+            profileStage.style.display = stage === 'profile' ? 'block' : 'none';
+        }
 
-            try {
-                console.log('📤 Sending google-signin IPC message');
-                const result = await ipcRenderer.invoke('clerk-google-signin');
-                console.log('📥 Google sign-in result:', result);
+        // Country selection
+        function updateCountryDisplay() {
+            countryFlag.textContent = selectedCountry.flag;
+            countryCode.textContent = `+${selectedCountry.dialCode}`;
+            countryInfo.textContent = `Required: ${selectedCountry.minLength} digits for ${selectedCountry.name}`;
+        }
 
-                if (result.success) {
-                    showSuccess('Google sign-in successful! Redirecting...');
-                    // The main process will handle navigation
-                } else {
-                    if (result.suggestion === 'email') {
-                        showError('Google sign-in is currently being optimized for Electron apps. Please use the email/password form below to sign in.');
-                        // Focus on email input to guide user
-                        setTimeout(() => {
-                            document.getElementById('email').focus();
-                        }, 2000);
-                    } else {
-                        showError(result.error || 'Google sign-in failed');
-                    }
-                }
-            } catch (error) {
-                console.error('❌ Google sign-in error:', error);
-                showError('Google sign-in is temporarily unavailable. Please use email/password sign-in below.');
-                // Focus on email input to guide user
-                setTimeout(() => {
-                    document.getElementById('email').focus();
-                }, 2000);
-            } finally {
-                setLoadingState(googleSigninBtn, googleSigninText, false, 'Checking...', 'Continue with Google');
+        function populateCountriesList() {
+            countriesList.innerHTML = '';
+            countries.forEach(country => {
+                const item = document.createElement('button');
+                item.className = 'country-item';
+                item.innerHTML = `
+                    <span class="country-flag">${country.flag}</span>
+                    <span class="country-name">${country.name}</span>
+                    <span class="country-dial">+${country.dialCode}</span>
+                `;
+                item.addEventListener('click', () => selectCountry(country));
+                countriesList.appendChild(item);
+            });
+        }
+
+        function selectCountry(country) {
+            selectedCountry = country;
+            updateCountryDisplay();
+            countryDropdown.classList.add('hidden');
+            countrySearch.value = '';
+            populateCountriesList();
+            validatePhoneInput();
+        }
+
+        function filterCountries(searchTerm) {
+            const filtered = countries.filter(country =>
+                country.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                country.dialCode.includes(searchTerm) ||
+                country.code.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+            
+            countriesList.innerHTML = '';
+            filtered.forEach(country => {
+                const item = document.createElement('button');
+                item.className = 'country-item';
+                item.innerHTML = `
+                    <span class="country-flag">${country.flag}</span>
+                    <span class="country-name">${country.name}</span>
+                    <span class="country-dial">+${country.dialCode}</span>
+                `;
+                item.addEventListener('click', () => selectCountry(country));
+                countriesList.appendChild(item);
+            });
+        }
+
+        function validatePhoneInput() {
+            const phone = mobileInput.value.replace(/\D/g, '');
+            const isValid = validatePhoneNumber(phone, selectedCountry);
+            sendOtpBtn.disabled = !isValid;
+            return isValid;
+        }
+
+        // Event listeners
+        countryButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            countryDropdown.classList.toggle('hidden');
+            if (!countryDropdown.classList.contains('hidden')) {
+                countrySearch.focus();
             }
         });
 
-        // Email Sign In
-        emailSigninForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            console.log('📧 Email sign-in form submitted');
+        countrySearch.addEventListener('input', (e) => {
+            filterCountries(e.target.value);
+        });
+
+        mobileInput.addEventListener('input', (e) => {
+            // Only allow numbers
+            e.target.value = e.target.value.replace(/\D/g, '');
+            validatePhoneInput();
+        });
+
+        sendOtpBtn.addEventListener('click', async () => {
+            console.log('📱 Send OTP button clicked');
             hideMessages();
 
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-
-            if (!email || !password) {
-                showError('Please enter both email and password');
+            const phone = mobileInput.value.replace(/\D/g, '');
+            if (!validatePhoneNumber(phone, selectedCountry)) {
+                showError('Please enter a valid phone number');
                 return;
             }
 
-            setLoadingState(signinBtn, signinText, true, 'Signing in...', 'Sign in');
+            currentPhoneNumber = formatPhoneForAPI(phone, selectedCountry.dialCode);
+            setLoadingState(sendOtpBtn, sendOtpText, true, 'Sending...', 'Send OTP');
 
             try {
-                console.log('📤 Sending email-signin IPC message for:', email);
-                const result = await ipcRenderer.invoke('clerk-email-signin', { email, password });
-                console.log('📥 Email sign-in result:', result);
+                const result = await ipcRenderer.invoke('send-otp', { phoneNumber: currentPhoneNumber });
 
                 if (result.success) {
-                    showSuccess('Sign-in successful! Redirecting...');
-                    // The main process will handle navigation
+                    // Store token if provided
+                    if (result.token) {
+                        localStorage.setItem('authToken', result.token);
+                        console.log('🔑 Token stored in localStorage from send-otp:', result.token);
+                    }
+                    showSuccess('OTP sent successfully!');
+                    sentToNumber.textContent = currentPhoneNumber;
+                    showStage('otp');
+                    otpInput.focus();
                 } else {
-                    showError(result.error || 'Sign-in failed');
+                    showError(result.error || 'Failed to send OTP');
                 }
             } catch (error) {
-                console.error('❌ Email sign-in error:', error);
-                showError('Failed to sign in. Please check your credentials and try again.');
+                console.error('❌ Send OTP error:', error);
+                showError('Failed to send OTP. Please try again.');
             } finally {
-                setLoadingState(signinBtn, signinText, false, 'Signing in...', 'Sign in');
+                setLoadingState(sendOtpBtn, sendOtpText, false, 'Sending...', 'Send OTP');
+            }
+        });
+
+        otpInput.addEventListener('input', (e) => {
+            // Only allow numbers and limit to 6 digits
+            e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
+            verifyOtpBtn.disabled = e.target.value.length < 4;
+        });
+
+        verifyOtpBtn.addEventListener('click', async () => {
+            console.log('🔐 Verify OTP button clicked');
+            hideMessages();
+
+            const otp = otpInput.value;
+            if (otp.length < 4) {
+                showError('Please enter the complete OTP');
+                return;
+            }
+
+            setLoadingState(verifyOtpBtn, verifyOtpText, true, 'Verifying...', 'Verify & Sign In');
+
+            try {
+                const result = await ipcRenderer.invoke('verify-otp', { 
+                    phoneNumber: currentPhoneNumber, 
+                    otp: otp 
+                });
+                console.log(result.userData.accessToken);
+                console.log(result);
+                
+                
+                if (result.success) {
+                    // Store token if provided
+                    let authToken = result.userData.accessToken || localStorage.getItem('authToken');
+                    if (result.userData.accessToken) {
+                        localStorage.setItem('authToken', result.userData.accessToken);
+                        console.log('🔑 Token stored in localStorage from verify-otp:', result.userData.accessToken);
+                    }
+
+                    if (!authToken) {
+                        console.warn('⚠️ No authentication token found');
+                        showError('Authentication token is missing. Please try again or contact support.');
+                        return;
+                    }
+
+                    console.log('✅ OTP verified successfully, token retrieved:', authToken);
+
+                    // Get MAC address
+                    const macResult = await ipcRenderer.invoke('get-mac-address');
+                    if (!macResult.success) {
+                        showError(macResult.error);
+                        return;
+                    }
+
+                    // Check trial status
+                    const trialResult = await ipcRenderer.invoke('check-user-trial', {
+                        macAddress: macResult.macAddress,
+                        token: authToken
+                    });
+
+                    if (!trialResult.success) {
+                        showError(trialResult.error);
+                        return;
+                    }
+
+                    // Log trial status for debugging
+                    console.log('✅ Trial status:', trialResult.data);
+
+                    // Proceed based on trial status
+                    if (trialResult.data.access.access === 'paid' ) {
+                        if (result.needsProfileCompletion) {
+                            showSuccess('OTP verified! Please complete your profile.');
+                            showStage('profile');
+                            firstNameInput.focus();
+                        } else {
+                            showSuccess('Sign-in successful! Redirecting...');
+                            await ipcRenderer.invoke('complete-authentication');
+                        }
+                    } else {
+                        showError('Your trial has expired or is not active. Please subscribe to continue.');
+                    }
+                } else {
+                    showError(result.error || 'Invalid OTP');
+                }
+            } catch (error) {
+                console.error('❌ Verify OTP error:', error);
+                showError('Failed to verify OTP. Please try again.');
+            } finally {
+                setLoadingState(verifyOtpBtn, verifyOtpText, false, 'Verifying...', 'Verify & Sign In');
+            }
+        });
+
+        backToPhoneBtn.addEventListener('click', () => {
+            showStage('phone');
+            otpInput.value = '';
+            hideMessages();
+        });
+
+        completeProfileBtn.addEventListener('click', async () => {
+            console.log('👤 Complete profile button clicked');
+            hideMessages();
+
+            const firstName = firstNameInput.value.trim();
+            const lastName = lastNameInput.value.trim();
+            const email = emailInput.value.trim();
+
+            if (!firstName || !email) {
+                showError('Please enter your first name and email');
+                return;
+            }
+
+            setLoadingState(completeProfileBtn, completeProfileText, true, 'Updating...', 'Complete Profile');
+
+            try {
+                const result = await ipcRenderer.invoke('complete-profile', { 
+                    firstName, 
+                    lastName, 
+                    email 
+                });
+
+                if (result.success) {
+                    showSuccess('Profile completed! Redirecting...');
+                    await ipcRenderer.invoke('complete-authentication');
+                } else {
+                    showError(result.error || 'Failed to update profile');
+                }
+            } catch (error) {
+                console.error('❌ Complete profile error:', error);
+                showError('Failed to update profile. Please try again.');
+            } finally {
+                setLoadingState(completeProfileBtn, completeProfileText, false, 'Updating...', 'Complete Profile');
             }
         });
 
@@ -727,15 +1235,18 @@
         devSkipBtn.addEventListener('click', async () => {
             console.log('🔑 Skip login button clicked');
             try {
-                // Send skip login event to main process
-                await ipcRenderer.invoke('skip-login', {
-                    keySkills: ['python'],
-                    jobRole: 'python'
-                });
+                await ipcRenderer.invoke('skip-login');
                 console.log('✅ Skip login request sent successfully');
             } catch (error) {
                 console.error('❌ Skip login failed:', error);
                 showError('Failed to skip login. Please try again.');
+            }
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!countryButton.contains(e.target) && !countryDropdown.contains(e.target)) {
+                countryDropdown.classList.add('hidden');
             }
         });
 
@@ -751,7 +1262,10 @@
             showError(error);
         });
 
-        console.log('✅ Login screen script loaded successfully');
+        // Initialize when page loads
+        init();
+
+        console.log('✅ OTP login screen script loaded successfully');
     </script>
 </body>
-</html> 
+</html>

@@ -3,7 +3,311 @@ const { app, BrowserWindow, ipcMain, dialog, shell, powerSaveBlocker, screen, gl
 const os = require("os");
 const path = require("path");
 const url = require('url');
+// Authentication-related IPC handlers (OTP-based authentication)
+const { getUserProfile, checkUserTrial, checkUserTrialOnLogin } = require('./utils/api/user-api.js');
+const axios = require('axios');
 
+
+    ipcMain.handle('send-otp', async (event, { phoneNumber }) => {
+        console.log('📱 [MAIN] Sending OTP to:', phoneNumber);
+        
+        try {
+            if (!phoneNumber) {
+                return { success: false, error: 'Phone number is required' };
+            }
+            
+            // Send OTP via AWS API
+            const response = await axios.post('https://ksjd4kbo5a.execute-api.us-east-1.amazonaws.com/Prod/users/send-otp', {
+                phone_number: phoneNumber
+            });
+
+            if (response.status === 200) {
+                console.log('✅ [MAIN] OTP sent successfully to:', phoneNumber);
+                return { success: true, message: 'OTP sent successfully!' };
+            } else {
+                console.error('❌ [MAIN] Failed to send OTP:', response.data);
+                return { success: false, error: 'Failed to send OTP' };
+            }
+        } catch (error) {
+            console.error('❌ [MAIN] OTP sending error:', error);
+            const errorMessage = error.response?.data?.detail || error.message || 'Failed to send OTP. Please try again.';
+            return { success: false, error: errorMessage };
+        }
+    });
+// MAC address fetching function
+function getMacAddress() {
+  try {
+    const networkInterfaces = os.networkInterfaces();
+    console.log('🔍 Fetching MAC address from network interfaces...');
+
+    for (const interfaceName in networkInterfaces) {
+      const interfaces = networkInterfaces[interfaceName];
+
+      for (const iface of interfaces) {
+        if (
+          !iface.mac ||
+          iface.mac === '00:00:00:00:00:00' ||
+          iface.internal ||
+          iface.family !== 'IPv4'
+        ) {
+          continue;
+        }
+
+        console.log(`✅ Found valid MAC address: ${iface.mac} on interface ${interfaceName}`);
+        return iface.mac;
+      }
+    }
+
+    console.warn('⚠️ No valid MAC address found.');
+    return null;
+  } catch (error) {
+    console.error('❌ Error fetching MAC address:', error.message);
+    return null;
+  }
+}
+/**
+ * Register all authentication-related IPC handlers
+ * @param {Electron.ipcMain} ipcMain 
+ */
+    console.log('🔐 Registering OTP-based authentication handlers...');
+
+    // Handle OTP sending
+
+    // Handle OTP verification
+    ipcMain.handle('verify-otp', async (event, { phoneNumber, otp }) => {
+        console.log('🔐 [MAIN] Verifying OTP for:', phoneNumber);
+        
+        try {
+            if (!phoneNumber || !otp) {
+                return { success: false, error: 'Phone number and OTP are required' };
+            }
+            
+            // Verify OTP via AWS API
+            const response = await axios.post('https://ksjd4kbo5a.execute-api.us-east-1.amazonaws.com/Prod/users/verify-otp', {
+                phone_number: phoneNumber,
+                otp_code: otp
+            });
+
+            if (response.status === 200 && response.data.access_token) {
+                console.log('✅ [MAIN] OTP verified successfully for:', phoneNumber);
+                
+                const accessToken = response.data.access_token;
+                
+                // Extract user ID from JWT token first
+                let userId = Math.random().toString(36).substr(2, 9);
+                try {
+                    const payload = JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64').toString());
+                    userId = payload.sub; // Extract user ID from JWT 'sub' field
+                    console.log('✅ [MAIN] User ID extracted from JWT:', userId ? `${userId.substring(0, 8)}...` : 'none');
+                } catch (error) {
+                    console.error('❌ [MAIN] Error decoding JWT token:', error);
+                }
+
+                // Get user profile and trial status with MAC address
+                console.log('🔍 [MAIN] Fetching user profile and trial status with MAC address...');
+                const [profileResult, trialResult] = await Promise.all([
+                    getUserProfile(accessToken),
+                    checkUserTrialOnLogin(accessToken, userId) // Use the enhanced login-specific function
+                ]);
+
+                // Create user object for Electron
+                const userData = {
+                    id: userId,
+                    fullName: profileResult.success ? 
+                        `${profileResult.data.first_name || ''} ${profileResult.data.last_name || ''}`.trim() : 
+                        `User ${phoneNumber.slice(-4)}`, // Default name using last 4 digits
+                    phoneNumber: phoneNumber,
+                    email: profileResult.success ? profileResult.data.email : '',
+                    isPhoneVerified: true,
+                    country: 'US', // Default, could be detected from phone number
+                    createdAt: new Date().toISOString(),
+                    lastSignInAt: new Date().toISOString(),
+                    accessToken: accessToken,
+                    needsProfileCompletion: !profileResult.success || !profileResult.data.first_name || !profileResult.data.email,
+                    profile: profileResult.success ? profileResult.data : null,
+                    trial: trialResult.success ? trialResult.data : null,
+                    macAddress: trialResult.macAddress, // Include MAC address for debugging/reference
+                    trialCheckSuccess: trialResult.success // Flag to indicate if trial check was successful
+                };
+                
+                // Log successful authentication with trial status
+                console.log('🎉 [MAIN] User authentication completed:', {
+                    userId: userData.id ? `${userData.id.substring(0, 8)}...` : 'none',
+                    phoneNumber: userData.phoneNumber,
+                    hasProfile: !!userData.profile,
+                    trialStatus: userData.trial ? {
+                        isTrialUser: userData.trial.is_trial,
+                        isPro: userData.trial.is_pro,
+                        trialDays: userData.trial.trial_days
+                    } : 'No trial data',
+                    macAddress: userData.macAddress ? `${userData.macAddress.substring(0, 8)}...` : 'none',
+                    trialCheckSuccess: userData.trialCheckSuccess
+                });
+                
+                // Store user data globally
+                global.currentUser = userData;
+                global.authToken = accessToken;
+                
+                // Send success message to renderer
+                event.sender.send('auth-success', userData);
+                
+                console.log('✅ [MAIN] Authentication successful for:', userData.phoneNumber);
+                
+                return { 
+                    success: true, 
+                    message: 'OTP verified successfully!', 
+                    userData,
+                    needsProfileCompletion: userData.needsProfileCompletion
+                };
+            }
+            console.error('❌ [MAIN] Invalid OTP response:', response.data);
+            return { success: false, error: 'Invalid OTP' };
+        } catch (error) {
+            console.error('❌ [MAIN] OTP verification error:', error);
+            const errorMessage = error.response?.data?.detail || error.message || 'Invalid OTP. Please try again.';
+            return { success: false, error: errorMessage };
+        }
+    });
+
+    // Handle profile completion
+    ipcMain.handle('complete-profile', async (event, { firstName, lastName, email }) => {
+        console.log('👤 [MAIN] Completing profile for user:', firstName, lastName, email);
+        
+        try {
+            if (!global.authToken) {
+                return { success: false, error: 'No authentication token found' };
+            }
+
+            // Update profile via AWS API
+            const response = await axios.put(
+                'https://ksjd4kbo5a.execute-api.us-east-1.amazonaws.com/Prod/users/profile',
+                {
+                    first_name: firstName,
+                    last_name: lastName,
+                    email: email
+                },
+                {
+                    headers: {
+                        'Authorization': `Bearer ${global.authToken}`
+                    }
+                }
+            );
+
+            if (response.status === 200) {
+                // Update global user data
+                if (global.currentUser) {
+                    global.currentUser.fullName = `${firstName} ${lastName}`.trim();
+                    global.currentUser.email = email;
+                    global.currentUser.needsProfileCompletion = false;
+                }
+
+                console.log('✅ [MAIN] Profile completed successfully');
+                return { success: true, message: 'Profile updated successfully!' };
+            } else {
+                return { success: false, error: 'Failed to update profile' };
+            }
+        } catch (error) {
+            console.error('❌ [MAIN] Profile completion error:', error);
+            const errorMessage = error.response?.data?.detail || error.message || 'Failed to update profile';
+            return { success: false, error: errorMessage };
+        }
+    });
+
+    // Handle authentication completion and navigation
+    ipcMain.handle('complete-authentication', async (event) => {
+        console.log('🚀 [MAIN] Completing authentication and navigating to welcome screen');
+        
+        try {
+            if (!global.currentUser) {
+                return { success: false, error: 'No user data found' };
+            }
+
+            // Navigate to welcome screen
+            setTimeout(() => {
+                console.log('🚀 [MAIN] Navigating to welcome screen after OTP auth');
+                transitionToWelcomeMode();
+                global.mainWindow.loadFile("./src/electron/screens/welcome/welcome-screen.html");
+            }, 1000);
+            
+            return { success: true };
+        } catch (error) {
+            console.error('❌ [MAIN] Authentication completion error:', error);
+            return { success: false, error: error.message };
+        }
+    });
+    
+// IPC handler for MAC address
+ipcMain.handle('get-mac-address', async () => {
+  console.log('📡 Received IPC request for MAC address');
+  const macAddress = getMacAddress();
+  
+  if (macAddress) {
+    return { success: true, macAddress };
+  } else {
+    return { success: false, error: 'Could not retrieve MAC address' };
+  }
+});
+ipcMain.handle('check-user-trial', async (event, { macAddress, token }) => {
+  const timestamp = new Date().toISOString();
+  console.log(`📡 [MAIN] [${timestamp}] Received request to check user trial with MAC address:`, macAddress);
+
+  // Validate inputs
+  if (!token) {
+    console.error(`❌ [MAIN] [${timestamp}] Missing authentication token`);
+    return {
+      success: false,
+      error: 'Authentication token is required'
+    };
+  }
+
+  if (!macAddress || macAddress === 'unknown') {
+    console.warn(`⚠️ [MAIN] [${timestamp}] MAC address is ${macAddress || 'missing'}, proceeding with default`);
+  }
+
+  try {
+    const apiUrl = 'https://ksjd4kbo5a.execute-api.us-east-1.amazonaws.com/Prod/trial/check-user-trail';
+    console.log(`🌐 [MAIN] [${timestamp}] Sending POST request to:`, apiUrl);
+
+    const response = await axios.post(apiUrl, {
+      mac_address: macAddress 
+    }, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    console.log(`✅ [MAIN] [${timestamp}] User trial check response -:`, response, {
+      status: response.status,
+      data: response.data
+    });
+
+    return {
+      success: true,
+      data: response.data
+    };
+  } catch (error) {
+    const errorDetails = {
+      message: error.message,
+      status: error.response?.status,
+      data: error.response?.data
+    };
+    console.error(`❌ [MAIN] [${timestamp}] Error checking user trial:`, errorDetails);
+
+    // Specific error handling
+    let errorMessage = error.response?.data?.message || error.message || 'Failed to check user trial';
+    if (error.response?.status === 401) {
+      errorMessage = 'Invalid or expired token';
+    } else if (error.response?.status === 429) {
+      errorMessage = 'Too many requests, please try again later';
+    }
+
+    return {
+      success: false,
+      error: errorMessage
+    };
+  }
+});
 // Define desired opacity for uniform transparency
 const DESIRED_OPACITY = 1.5; // 150% opacity for maximum readability
 
@@ -898,11 +1202,11 @@ ipcMain.handle('clerk-email-signin', async (event, { email, password }) => {
       }
       
       // Wait a moment for UI feedback, then navigate directly
-      setTimeout(() => {
-        console.log('🚀 [MAIN] Navigating to welcome screen after email auth and validation');
-        transitionToWelcomeMode();
-        global.mainWindow.loadFile("./src/electron/screens/welcome/welcome-screen.html");
-      }, 1500);
+      // setTimeout(() => {
+      //   console.log('🚀 [MAIN] Navigating to welcome screen after email auth and validation');
+      //   transitionToWelcomeMode();
+      //   global.mainWindow.loadFile("./src/electron/screens/welcome/welcome-screen.html");
+      // }, 1500);
     }
     
     return result;
@@ -964,7 +1268,7 @@ ipcMain.handle('clerk-google-signin', async (event) => {
       setTimeout(() => {
         console.log('🚀 [MAIN] Navigating to welcome screen after Google auth and validation');
         transitionToWelcomeMode();
-        global.mainWindow.loadFile("./src/electron/screens/welcome/welcome-screen.html");
+        // global.mainWindow.loadFile("./src/electron/screens/welcome/welcome-screen.html");
       }, 1500);
     }
     
@@ -2129,6 +2433,99 @@ ipcMain.handle("open-permission-settings", async () => {
     return false;
   }
 });
+
+
+
+
+    
+    // Handle Google sign-in (legacy - redirects to OTP flow)
+    ipcMain.handle('clerk-google-signin', async (event) => {
+        console.log('🔍 [MAIN] Google sign-in attempted - redirecting to OTP flow');
+        return { 
+            success: false, 
+            error: 'Please use phone number sign-in for the best experience',
+            suggestion: 'otp'
+        };
+    });
+
+    // Handle mobile sign-in (legacy compatibility)
+    ipcMain.handle('clerk-mobile-signin', async (event, { mobile }) => {
+        console.log('📱 [MAIN] Legacy mobile sign-in for:', mobile);
+        
+        // Redirect to new OTP flow
+        return await ipcMain.emit('send-otp', event, { phoneNumber: mobile });
+    });
+
+    // Handle getting current user data for welcome screen
+    ipcMain.handle('get-current-user', async () => {
+        try {
+            if (global.currentUser) {
+                console.log('👤 [MAIN] Returning current user data:', global.currentUser.phoneNumber);
+                return {
+                    success: true,
+                    user: global.currentUser
+                };
+            } else {
+                console.log('👤 [MAIN] No current user found');
+                return {
+                    success: false,
+                    error: 'No user logged in'
+                };
+            }
+        } catch (error) {
+            console.error('❌ [MAIN] Error getting current user:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    });
+
+    // Handle development skip login
+    ipcMain.handle('skip-login', async (event) => {
+        try {
+            console.log('🔑 Skip login requested for development');
+            
+            // Set default user data for development
+            const defaultUser = {
+                id: 'dev-user-id',
+                fullName: 'Development User',
+                phoneNumber: '+11234567890',
+                email: 'developer@interviewlift.com',
+                isPhoneVerified: true,
+                country: 'US',
+                createdAt: new Date().toISOString(),
+                lastSignInAt: new Date().toISOString(),
+                accessToken: 'dev-token',
+                needsProfileCompletion: false
+            };
+            
+            // Store user data globally
+            global.currentUser = defaultUser;
+            global.authToken = 'dev-token';
+            
+            console.log('✅ Default user data set for development:', defaultUser.phoneNumber);
+            
+            // Navigate to welcome screen (same as other auth methods)
+            setTimeout(() => {
+                console.log('🚀 [MAIN] Navigating to welcome screen after skip login');
+                transitionToWelcomeMode();
+                global.mainWindow.loadFile("./src/electron/screens/welcome/welcome-screen.html");
+            }, 500); // Shorter delay since no actual auth is happening
+            
+            return { success: true };
+        } catch (error) {
+            console.error('❌ Skip login error:', error);
+            return { success: false, error: error.message };
+        }
+    });
+
+    // Check development mode
+    ipcMain.handle('is-development-mode', async () => {
+        return process.env.NODE_ENV === 'development' || process.env.DEBUG === 'true';
+    });
+
+
 
 // Handle skip login request
 ipcMain.handle('skip-login', async (event, data) => {
